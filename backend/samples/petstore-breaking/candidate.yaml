@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: Pet Store API
+  version: 2.0.0
+servers:
+  - url: https://api.petstore.example.com/v1
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [available, adopted]
+        - name: X-Tenant-Id
+          in: header
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: A page of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/Pet"}
+    post:
+      operationId: createPet
+      summary: Create a pet
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NewPet"}
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Pet"}
+  /pets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      operationId: getPet
+      responses:
+        "200":
+          description: A pet
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Pet"}
+        "404":
+          description: Not found
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    NewPet:
+      type: object
+      required: [name, species]
+      properties:
+        name: {type: string, maxLength: 60}
+        species: {type: string, enum: [dog, cat, bird]}
+    Pet:
+      type: object
+      required: [id, status]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        species: {type: string}
+        status:
+          type: string
+          enum: [available, adopted, archived, pending]

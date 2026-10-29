@@ -1,0 +1,1 @@
+Pet Store v1.0 -> v1.1 with additive changes only: optional query param, new endpoint, new optional fields, relaxed request limit. Expected: PROCEED.

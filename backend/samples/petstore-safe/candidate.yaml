@@ -1,0 +1,143 @@
+openapi: 3.0.3
+info:
+  title: Pet Store API
+  version: 1.1.0
+servers:
+- url: https://api.petstore.example.com/v1
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - available
+          - adopted
+          - archived
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - name
+          - -name
+      responses:
+        '200':
+          description: A page of pets
+          headers:
+            X-Total-Count:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pet'
+    post:
+      operationId: createPet
+      summary: Create a pet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPet'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+  /pets/{petId}:
+    parameters:
+    - name: petId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      operationId: getPet
+      responses:
+        '200':
+          description: A pet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '404':
+          description: Not found
+    delete:
+      operationId: deletePet
+      responses:
+        '204':
+          description: Deleted
+  /pets/{petId}/photos:
+    get:
+      operationId: listPetPhotos
+      parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Photos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: uri
+components:
+  schemas:
+    NewPet:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        tag:
+          type: string
+        notes:
+          type: string
+    Pet:
+      type: object
+      required:
+      - id
+      - name
+      - status
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+        tag:
+          type: string
+        status:
+          type: string
+          enum:
+          - available
+          - adopted
+          - archived
+        createdAt:
+          type: string
+          format: date-time

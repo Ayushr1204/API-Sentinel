@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pyyaml
+openapi-spec-validator
+openapi-schema-validator
+jsonschema
+httpx
+python-multipart
+pytest
+langgraph

@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Invoices API
+  version: 2.3.0
+servers:
+  - url: https://billing.example.com/v2
+paths:
+  /invoices:
+    get:
+      operationId: listInvoices
+      parameters:
+        - name: status
+          in: query
+          schema: {type: string, enum: [draft, open, paid]}
+      responses:
+        '200':
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Invoice'}
+    post:
+      operationId: createInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NewInvoice'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Invoice'}
+  /invoices/{invoiceId}:
+    get:
+      operationId: getInvoice
+      parameters:
+        - {name: invoiceId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Invoice
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Invoice'}
+  /invoices/{invoiceId}/pdf:
+    get:
+      operationId: getInvoicePdf
+      parameters:
+        - {name: invoiceId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: PDF
+          content:
+            application/pdf:
+              schema: {type: string, format: binary}
+components:
+  schemas:
+    Invoice:
+      type: object
+      required: [id, customerId, amount, currency, status]
+      properties:
+        id: {type: string, readOnly: true}
+        customerId: {type: string}
+        amount: {type: number, description: Total in major units}
+        currency: {type: string, minLength: 3, maxLength: 3}
+        status: {type: string, enum: [draft, open, paid]}
+        lineCount: {type: integer}
+    NewInvoice:
+      type: object
+      required: [customerId, quantity, unitPrice]
+      properties:
+        customerId: {type: string}
+        quantity: {type: integer, minimum: 1}
+        unitPrice: {type: number}
+        memo: {type: string}

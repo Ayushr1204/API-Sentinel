@@ -1,0 +1,1 @@
+Orders API 3.4 -> 3.5 (OpenAPI 3.1) with consumer code hidden among six unrelated services that use the same field names. Run the investigation to see the agent retry with a broadened query and still find the billing worker. Expected: HUMAN_REVIEW, then BLOCK after investigation.

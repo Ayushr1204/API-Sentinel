@@ -1,0 +1,49 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Orders API", "version": "3.4.0"},
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {
+          "200": {"description": "Order", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}}
+        }
+      }
+    },
+    "/orders": {
+      "post": {
+        "operationId": "createOrder",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OrderInput"}}}},
+        "responses": {"201": {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}}}
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OrderInput": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/components/schemas/LineItem"}},
+          "couponCode": {"type": "string"}
+        }
+      },
+      "LineItem": {
+        "type": "object",
+        "required": ["sku", "quantity"],
+        "properties": {"sku": {"type": "string"}, "quantity": {"type": "integer", "minimum": 1}}
+      },
+      "Order": {
+        "type": "object",
+        "required": ["id", "state", "total"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "state": {"type": "string", "enum": ["placed", "paid", "shipped"]},
+          "total": {"type": "number"},
+          "trackingUrl": {"type": "string", "format": "uri"}
+        }
+      }
+    }
+  }
+}

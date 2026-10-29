@@ -1,0 +1,1 @@
+Pet Store v1 -> v2 with breaking changes: removed DELETE, new required header, tightened limits, new required request field, response field removed/made optional, auth added. Expected: BLOCK.

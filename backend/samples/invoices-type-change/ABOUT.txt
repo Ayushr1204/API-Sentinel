@@ -1,0 +1,1 @@
+Invoices API 2.3 -> 3.0 (OpenAPI 3.0): amount becomes a decimal string in responses, quantity becomes a string in requests, PDF download endpoint removed, new required customerId filter, new optional dueDate. Expected: BLOCK.
