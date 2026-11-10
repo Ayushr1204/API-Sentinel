@@ -287,3 +287,4 @@ There is no authentication: run locally on `127.0.0.1`.
 ## Scope
 OpenAPI 3.0.x and 3.1.x only, single-file specs (external `$ref`s are rejected and never fetched). Swagger 2.0,
 AsyncAPI, GraphQL and gRPC are out of scope. There is no authentication: run locally on `127.0.0.1`.
+"# API-Sentinel" 
