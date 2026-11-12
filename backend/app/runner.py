@@ -1,5 +1,5 @@
 """Executes compatibility tests. Every check really runs: schema checks use OpenAPI-aware JSON Schema
-validators (OAS 3.0 or 3.1 semantics) and structural checks read the candidate/base documents."""
+validators (OAS 3.1 semantics: every document is converted to the internal model first) and structural checks read the candidate/base documents."""
 from __future__ import annotations
 
 import time

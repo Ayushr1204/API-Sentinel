@@ -22,10 +22,12 @@ from .config import settings
 from .evidence import build_index
 from .pipeline import run_analysis
 from .spec_loader import load_spec
+from . import groundtruth
+from .convert import format_label, spec_family
 from .store import Store
 
 app = FastAPI(title="API Sentinel", version=__version__,
-              description="Breaking-change detection and targeted test generation for OpenAPI 3.0/3.1")
+              description="Breaking-change detection and targeted test generation for Swagger 2.0 and OpenAPI 3.0/3.1/3.2")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
                    allow_headers=["Content-Type"])
 
@@ -88,8 +90,35 @@ def _samples() -> dict[str, dict]:
         if base and cand:
             about = (d / "ABOUT.txt").read_text(encoding="utf-8").strip() if (d / "ABOUT.txt").exists() else ""
             context = sorted(p for p in (d / "context").iterdir() if p.is_file()) if (d / "context").is_dir() else []
-            out[d.name] = {"name": d.name, "description": about, "base": base, "candidate": cand, "context": context}
+            out[d.name] = {"name": d.name, "description": about, "base": base, "candidate": cand, "context": context,
+                           "dir": d}
     return out
+
+
+def _format_of(path) -> str | None:
+    """'OpenAPI 3.1.0' / 'Swagger 2.0' from a sample file, without full validation (display only)."""
+    try:
+        import yaml
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        family, version = spec_family(doc) if isinstance(doc, dict) else ("", "")
+        return format_label(family, version) if family else None
+    except (OSError, ValueError, yaml.YAMLError):
+        return None
+
+
+def _expected_for(sample: str | None) -> dict | None:
+    s = _samples().get(sample or "")
+    return groundtruth.load_expected(s["dir"]) if s else None
+
+
+def _ground_truth(analysis: dict) -> dict | None:
+    expected = _expected_for(analysis.get("sample"))
+    if not expected:
+        return None
+    gt = groundtruth.score(analysis, expected)
+    if analysis.get("investigation"):
+        gt["investigation"] = groundtruth.score_investigation(analysis["investigation"], expected)
+    return gt
 
 
 def _analyse(base_raw: bytes | str, base_name: str, cand_raw: bytes | str, cand_name: str,
@@ -113,6 +142,7 @@ def _full(analysis_id: str) -> dict:
     if a is None:
         raise HTTPException(404, "Analysis not found")
     a["review_policy"] = review_policy.requirements(a, a.get("investigation"))
+    a["ground_truth"] = _ground_truth(a)
     return a
 
 
@@ -150,8 +180,16 @@ async def create_analysis(base_spec: UploadFile = File(...), candidate_spec: Upl
 
 @app.get("/api/samples")
 def list_samples() -> list[dict]:
-    return [{"name": s["name"], "description": s["description"], "context_files": [p.name for p in s["context"]]}
-            for s in _samples().values()]
+    out = []
+    for s in _samples().values():
+        expected = groundtruth.load_expected(s["dir"])
+        out.append({"name": s["name"], "description": s["description"],
+                    "context_files": [p.name for p in s["context"]],
+                    "formats": {"base": _format_of(s["base"]), "candidate": _format_of(s["candidate"])},
+                    "expected": {"decision": expected["decision"],
+                                 "decision_after_investigation": expected.get("decision_after_investigation"),
+                                 "changes": len(expected.get("changes") or [])} if expected else None})
+    return out
 
 
 @app.get("/api/samples/{name}/{which}", response_class=PlainTextResponse)
@@ -230,7 +268,13 @@ async def investigate(analysis_id: str, context: list[UploadFile] = File(default
                                      [n for n, _ in files], target)
     get_store().save_investigation(result, SYSTEM_ACTOR)
     _remember_investigation(result)
-    return result
+    return _with_ground_truth(result, analysis.get("sample"))
+
+
+def _with_ground_truth(investigation: dict, sample: str | None) -> dict:
+    """Expected vs actual decision after investigation, for labelled samples (computed on read, never stored)."""
+    gt = groundtruth.score_investigation(investigation, _expected_for(sample))
+    return {**investigation, "ground_truth": gt} if gt else investigation
 
 
 def _remember_investigation(result: dict) -> None:
@@ -370,7 +414,8 @@ def get_investigation(analysis_id: str) -> dict:
     inv = get_store().latest_investigation(analysis_id)
     if not inv:
         raise HTTPException(404, "No investigation for this analysis")
-    return inv
+    a = get_store().get_analysis(analysis_id) or {}
+    return _with_ground_truth(inv, a.get("sample"))
 
 
 class ReviewIn(BaseModel):

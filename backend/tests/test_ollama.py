@@ -15,7 +15,7 @@ from app.agent import llm as llm_mod
 from app.agent.llm import LLMError, OllamaClient
 from test_agent import investigate
 
-MODEL = "qwen3.5:4b"
+MODEL = "qwen3.5:9b"
 
 
 def reply(content="", tool_calls=None, done_reason="stop", thinking=None, prompt_tokens=120):
@@ -70,7 +70,7 @@ def test_defaults_and_provider_selection(monkeypatch):
     c = llm_mod.default_client()
     assert isinstance(c, OllamaClient) and c.model == MODEL and c.name == f"ollama:{MODEL}"
     assert c.base_url == "http://localhost:11434" and c.num_ctx == 8192 and c.temperature == 0.0
-    assert c.think is False and c.timeout == 180.0 and c.supports_tools and not c.mocked
+    assert c.think is False and c.timeout == 300.0 and c.supports_tools and not c.mocked
     assert llm_mod.configuration_problem() is None
     monkeypatch.delenv("SENTINEL_LLM_PROVIDER")
     monkeypatch.setenv("LLM_PROVIDER", "local")  # alias from the brief
@@ -97,7 +97,7 @@ def test_environment_overrides(monkeypatch):
     monkeypatch.setenv("OLLAMA_THINK", "true")
     c = OllamaClient()
     assert c.model == "granite4:3b" and c.base_url == "http://127.0.0.1:11500"
-    assert c.num_ctx == 16384 and c.timeout == 180.0 and c.temperature == 0.2 and c.think is True
+    assert c.num_ctx == 16384 and c.timeout == 300.0 and c.temperature == 0.2 and c.think is True
 
 
 def test_config_endpoint_reports_the_local_provider(monkeypatch):

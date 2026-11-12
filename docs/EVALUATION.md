@@ -50,6 +50,31 @@ Decision confusion (rows = expected, columns = got):
 | Direction-aware severity, no contract tests | 20/21 | 95% | optional-response-field-removed: BLOCK (expected HUMAN_REVIEW) |
 | API Sentinel baseline (severity + executed contract tests) | 21/21 | 100% | none |
 
+## Bundled samples against their ground truth
+
+Each sample folder ships an `expected.json` written by hand (expected changes with severities, the
+expected baseline decision and, for samples with consumer code, the expected decision after a
+rules-mode investigation). The same score is shown on the analysis page in the UI.
+
+* Samples: **12**, fully matching: **12**; decisions correct **12/12**
+* Expected changes found: **100/100** (recall 100.00%); unexpected changes: **0** (precision 100.00%); severity correct: **100/100**
+* Investigations checked: **3/3** correct
+
+| Sample | Formats | Expected | Got | After investigation | Changes (matched/expected, unexpected) | Result | Notes |
+|---|---|---|---|---|---|---|---|
+| `bookings-oas31-to-oas30-downgrade` | OpenAPI 3.1.0 → OpenAPI 3.0.3 | BLOCK | BLOCK | — | 11/11, 0 | pass |  |
+| `bookings-oas32-to-swagger2-rollback` | OpenAPI 3.2.0 → Swagger 2.0 | BLOCK | BLOCK | — | 11/11, 0 | pass |  |
+| `bookings-swagger2-to-oas31-migration` | Swagger 2.0 → OpenAPI 3.1.0 | PROCEED | PROCEED | — | 1/1, 0 | pass |  |
+| `bookings-swagger2-to-oas32-release` | Swagger 2.0 → OpenAPI 3.2.0 | BLOCK | BLOCK | — | 11/11, 0 | pass |  |
+| `inventory-oas32-query-method` | OpenAPI 3.2.0 → OpenAPI 3.2.0 | HUMAN_REVIEW | HUMAN_REVIEW | — | 3/3, 0 | pass |  |
+| `invoices-type-change` | OpenAPI 3.0.3 → OpenAPI 3.0.3 | BLOCK | BLOCK | — | 9/9, 0 | pass |  |
+| `orders-31-noisy-consumers` | OpenAPI 3.1.0 → OpenAPI 3.1.0 | HUMAN_REVIEW | HUMAN_REVIEW | BLOCK (exp. BLOCK) | 6/6, 0 | pass |  |
+| `orders-31-review` | OpenAPI 3.1.0 → OpenAPI 3.1.0 | HUMAN_REVIEW | HUMAN_REVIEW | BLOCK (exp. BLOCK) | 6/6, 0 | pass |  |
+| `payments-auth-change` | OpenAPI 3.0.3 → OpenAPI 3.0.3 | BLOCK | BLOCK | — | 7/7, 0 | pass |  |
+| `petstore-breaking` | OpenAPI 3.0.3 → OpenAPI 3.0.3 | BLOCK | BLOCK | BLOCK (exp. BLOCK) | 22/22, 0 | pass |  |
+| `petstore-safe` | OpenAPI 3.0.3 → OpenAPI 3.0.3 | PROCEED | PROCEED | — | 7/7, 0 | pass |  |
+| `users-additive-oas31` | OpenAPI 3.1.0 → OpenAPI 3.1.0 | PROCEED | PROCEED | — | 6/6, 0 | pass |  |
+
 ## Agent investigation compared with simpler approaches
 
 Impact precision/recall are per change, over cases whose affected changes were labelled by reading the consumer code (`affected` in `AGENT_CASES`).

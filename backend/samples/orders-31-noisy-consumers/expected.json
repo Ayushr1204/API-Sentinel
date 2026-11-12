@@ -1,0 +1,49 @@
+{
+  "decision": "HUMAN_REVIEW",
+  "decision_after_investigation": "BLOCK",
+  "rationale": "Same contract change as orders-31-review; the affected billing worker is hidden among six unrelated consumers, so the investigation needs its bounded retry to reach BLOCK.",
+  "changes": [
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "POST /orders",
+      "field": "state",
+      "why": "New state 'refunded' may surprise exhaustive switches."
+    },
+    {
+      "rule": "NULLABLE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "POST /orders",
+      "field": "trackingUrl",
+      "why": "trackingUrl may now be null."
+    },
+    {
+      "rule": "OPERATION_ID_CHANGED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /orders/{orderId}",
+      "field": null,
+      "why": "Generated SDK method name changes (getOrder -> fetchOrder)."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /orders/{orderId}",
+      "field": "state",
+      "why": "New state 'refunded' in the read model."
+    },
+    {
+      "rule": "NULLABLE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /orders/{orderId}",
+      "field": "trackingUrl",
+      "why": "trackingUrl may now be null."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /orders",
+      "field": "giftMessage",
+      "why": "New optional request field; old clients simply omit it."
+    }
+  ]
+}

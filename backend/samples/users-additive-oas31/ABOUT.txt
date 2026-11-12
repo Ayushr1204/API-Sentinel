@@ -1,0 +1,1 @@
+Users API 2.1 -> 2.2 (OpenAPI 3.1): a purely additive release. Optional role filter, new avatarUrl field, longer display names allowed, and a new sessions endpoint. Expected: PROCEED.

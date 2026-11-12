@@ -1,0 +1,52 @@
+openapi: 3.2.0
+info:
+  title: Inventory API
+  version: 5.0.0
+  description: Room inventory for StayFlow properties (sample, OpenAPI 3.2).
+servers:
+  - url: https://inventory.stayflow.example
+paths:
+  /rooms:
+    get:
+      operationId: listRooms
+      responses:
+        '200':
+          description: Rooms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Room'
+  /rooms/{roomId}:
+    get:
+      operationId: getRoom
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+components:
+  schemas:
+    Room:
+      type: object
+      required: [id, type, capacity, floor]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [single, double, suite]
+        capacity:
+          type: integer
+          minimum: 1
+        floor:
+          type: integer

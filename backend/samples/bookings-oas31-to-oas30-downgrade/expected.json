@@ -1,0 +1,92 @@
+{
+  "decision": "BLOCK",
+  "rationale": "Same contract changes as the 3.2 release; the downgrade itself must not add or hide anything.",
+  "changes": [
+    {
+      "rule": "SPEC_FORMAT_CHANGED",
+      "severity": "NON_BREAKING",
+      "operation": null,
+      "field": null,
+      "why": "OpenAPI 3.1.0 to OpenAPI 3.0.3, a downgrade."
+    },
+    {
+      "rule": "REQUIRED_PARAM_ADDED",
+      "severity": "BREAKING",
+      "operation": "GET /bookings",
+      "field": "propertyId",
+      "direction": "request",
+      "why": "Old clients never send propertyId."
+    },
+    {
+      "rule": "CONSTRAINT_TIGHTENED",
+      "severity": "BREAKING",
+      "operation": "POST /bookings",
+      "field": "guest",
+      "direction": "request",
+      "why": "guest maxLength 80 -> 50 rejects longer names old clients send."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /bookings",
+      "field": "status",
+      "direction": "request",
+      "why": "The status filter accepts one more value; old requests stay valid."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /bookings",
+      "field": "status",
+      "direction": "response",
+      "why": "Responses may carry the new status 'no_show'."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "POST /bookings",
+      "field": "status",
+      "direction": "response",
+      "why": "Created booking may carry 'no_show'."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /bookings/{bookingId}",
+      "field": "status",
+      "direction": "response",
+      "why": "Booking may carry 'no_show'."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /bookings",
+      "field": "currency",
+      "direction": "response",
+      "why": "New response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /bookings",
+      "field": "currency",
+      "direction": "response",
+      "why": "New response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /bookings/{bookingId}",
+      "field": "currency",
+      "direction": "response",
+      "why": "New response field."
+    },
+    {
+      "rule": "OPERATION_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "DELETE /bookings/{bookingId}",
+      "field": null,
+      "why": "New cancel operation."
+    }
+  ]
+}

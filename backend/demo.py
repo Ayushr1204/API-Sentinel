@@ -56,22 +56,32 @@ def main_demo() -> int:
     c = TestClient(main.app)
     start_target()
 
-    print("\n1. Deterministic analysis of the three sample pairs")
+    print("\n1. Deterministic analysis of every sample, scored against its ground truth (expected.json)")
     ids = {}
-    for name, expected in (("petstore-safe", "PROCEED"), ("orders-31-review", "HUMAN_REVIEW"),
-                           ("petstore-breaking", "BLOCK"), ("invoices-type-change", "BLOCK"),
-                           ("orders-31-noisy-consumers", "HUMAN_REVIEW")):
-        a = c.post(f"/api/analyses/sample/{name}").json()
-        ids[name] = a["id"]
-        n = a["recommendation"]["counts"]
-        check(a["recommendation"]["decision"] == expected,
-              f"{name}: {n['changes']} changes, {n['tests']} tests ({n['tests_failed']} failed) -> "
-              f"{a['recommendation']['decision']} (expected {expected})")
+    samples = c.get("/api/samples").json()
+    for s in samples:
+        a = c.post(f"/api/analyses/sample/{s['name']}").json()
+        ids[s["name"]] = a["id"]
+        n, gt = a["recommendation"]["counts"], a["ground_truth"] or {}
+        k = gt.get("counts", {})
+        check(bool(gt.get("pass")),
+              f"{s['name']} ({s['formats']['base']} -> {s['formats']['candidate']}): {n['changes']} changes, "
+              f"{n['tests']} tests ({n['tests_failed']} failed) -> {a['recommendation']['decision']} "
+              f"(expected {gt.get('expected_decision')}; {k.get('matched')}/{k.get('expected')} labelled changes, "
+              f"{k.get('unexpected')} unexpected)")
 
-    print("\n2. Validation rejects out-of-scope input")
-    r = c.post("/api/analyses", files={"base_spec": ("old.yaml", b"swagger: '2.0'\ninfo: {title: x, version: '1'}"),
+    print("\n2. Any supported version to any other; out-of-scope input is refused")
+    swagger = b"swagger: '2.0'\ninfo: {title: x, version: '1'}\npaths: {}"
+    oas32 = b"openapi: 3.2.0\ninfo: {title: x, version: '1'}\npaths: {}"
+    for (bn, braw), (cn, craw) in ((("old.yaml", swagger), ("new.yaml", oas32)), (("new.yaml", oas32), ("old.yaml", swagger))):
+        r = c.post("/api/analyses", files={"base_spec": (bn, braw), "candidate_spec": (cn, craw)})
+        rules = [ch["rule"] for ch in r.json().get("changes", [])] if r.status_code == 200 else []
+        check(r.status_code == 200 and rules == ["SPEC_FORMAT_CHANGED"],
+              f"{'Swagger 2.0 -> OpenAPI 3.2.0' if bn == 'old.yaml' else 'OpenAPI 3.2.0 -> Swagger 2.0'}: "
+              f"accepted, only the format note reported ({rules})")
+    r = c.post("/api/analyses", files={"base_spec": ("old.yaml", b"swagger: '1.2'\ninfo: {title: x, version: '1'}"),
                                        "candidate_spec": ("new.yaml", b"asyncapi: 2.6.0")})
-    check(r.status_code == 422, f"Swagger 2.0 + AsyncAPI upload refused with {r.status_code}")
+    check(r.status_code == 422, f"Swagger 1.2 + AsyncAPI upload refused with {r.status_code}")
 
     print("\n3. Agent investigation with consumer code (orders-31-review)")
     inv = c.post(f"/api/analyses/{ids['orders-31-review']}/investigate", data={"use_sample_context": "true"}).json()
@@ -126,7 +136,7 @@ def main_demo() -> int:
     audit = c.get("/api/audit").json()
     actions = [e["action"] for e in reversed(audit["events"])]
     check(audit["chain"]["valid"], f"hash chain intact over {audit['chain']['events']} events")
-    check(actions.count("analysis.created") == 5 and "analysis.rejected" in actions and
+    check(actions.count("analysis.created") == len(samples) + 2 and "analysis.rejected" in actions and
           actions.count("investigation.completed") == 3 and "investigation.refused" in actions and
           actions[-1] == "review.rejected", "every analysis, investigation, refusal and decision was recorded")
 
@@ -137,6 +147,12 @@ def main_demo() -> int:
           f"{m['precision']:.0%}, recall {m['recall']:.0%}")
     check(am["correct"] == am["cases"] and am["false_escalations"] == 0,
           f"agent {am['correct']}/{am['cases']} cases, {am['false_escalations']} false escalations")
+
+    sm = ev["samples"]["metrics"]
+    check(sm["passed"] == sm["samples"] and sm["investigations_correct"] == sm["investigations_checked"],
+          f"ground truth: {sm['passed']}/{sm['samples']} samples match, {sm['matched']}/{sm['expected_changes']} "
+          f"labelled changes found, {sm['unexpected']} unexpected, investigations "
+          f"{sm['investigations_correct']}/{sm['investigations_checked']}")
 
     main.get_store().close()
     print(f"\n{'All checks passed.' if not FAILURES else f'{len(FAILURES)} check(s) FAILED.'}  (database: {db})")

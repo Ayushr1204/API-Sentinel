@@ -23,7 +23,8 @@ Open http://127.0.0.1:8000. To start from an empty history, stop the server, del
 ## 1. Validation and the comparison page (1 minute)
 * Point out the sidebar **Status**: backend online, reasoning mode (LLM model or "Rules only"), audit chain intact.
 * Drop any `.txt` file on **Baseline**. **Expect** an instant client-side refusal: "is not a .yaml, .yml or .json file".
-* Drop a Swagger 2.0 YAML file. **Expect** a server-side refusal: "Swagger 2.0 is not supported. Convert to OpenAPI 3.0/3.1 first."
+* Drop an AsyncAPI or Swagger 1.2 file. **Expect** a server-side refusal naming the supported formats: "Swagger 2.0 or OpenAPI 3.0.x, 3.1.x, 3.2.x".
+* Swagger 2.0 and OpenAPI 3.2 are accepted: compare `bookings-swagger2-to-oas32-release` and point at the format labels on both sides and the single non-breaking *Spec format changed* row.
 
 ## 2. Deterministic detection with confirmed breaks: `invoices-type-change` (2 minutes)
 Click **Compare** on the `invoices-type-change` card.
@@ -89,9 +90,9 @@ Back on `orders-31-review` → **Release decision**.
 
 ### Upload and format validation
 - The **Baseline** slot is the current API spec; the **Candidate** is the one you plan to ship.
-- Accepted: OpenAPI 3.0.x / 3.1.x in JSON or YAML, max 2 MB, single file (no external `$ref`).
-- Drop a `.txt` → client-side refusal. Drop Swagger 2.0 YAML → server-side 422 with "Swagger 2.0 is not supported".
-- The info callout below the action bar explains processing, privacy, and accepted inputs.
+- Accepted: Swagger 2.0 or OpenAPI 3.0.x / 3.1.x / 3.2.x in JSON or YAML, max 2 MB, single file (no external `$ref`).
+  The two slots may use different versions, in either direction; the card on each sample shows its formats.
+- Drop a `.txt` → client-side refusal. Drop an AsyncAPI or Swagger 1.2 file → server-side refusal naming the supported formats.
 
 ### Real tool calling
 - In step 3, after investigation, expand an `assess` step marked **LLM** in the trace.
@@ -108,10 +109,26 @@ Back on `orders-31-review` → **Release decision**.
   buried among 6 unrelated services). `reflect` triggers a bounded retry with broadened terms. The second retrieval
   finds the billing worker. Expand the **Planning & control** filter to see each `reflect` decision.
 
+### The LangGraph view
+- After an investigation, **Execution graph and trace** opens on **LangGraph**: the agent's compiled state graph
+  (`START → baseline → plan → retrieve → assess → refine → execute → verify → reflect → decide → END`), drawn from
+  `graph.py`. Each node shows how often it ran, in which mode (tool, rules, LLM) and for how long; each edge shows how
+  often it was taken. The `reflect → retrieve` loop is split into *retry*, *next change* and *re-plan*.
+- **Replay run** walks the run step by step: the active node pulses and the step's details appear below.
+- Pick a change in **Change** to see only its path (for `orders-31-noisy-consumers`, C005 shows *retry ×1*).
+- Click a node to list its visits; click a visit for the full step. **Per change** shows one row per change attempt
+  (retries highlighted); **Step list** is the raw trace.
+
 ### Traces and verification
 - **Show all steps** in the trace. Filter by **All**, **Tool calls**, **Reasoning**, or **Planning & control**.
 - Each event shows mode (LLM/rules/tool), wall-clock time, and a summary. Expand for the full detail JSON.
 - Verification: each finding must quote the cited chunk verbatim, or it is discarded. Check the `verify` step.
+
+### Ground truth
+- On any sample, open the **Ground truth** tab: expected vs actual decision, each labelled change as matched,
+  wrong severity or missed, and any unexpected change. After an investigation on `orders-31-review`, the
+  *After investigation* box fills in.
+- **Evaluation** → *Bundled samples vs ground truth* scores all 12 samples.
 
 ### Final decision and audit
 - The recommendation banner on the results page. Investigation may change it (e.g. Review → Block).
@@ -126,12 +143,12 @@ Set `SENTINEL_LLM=off` in `backend\.env` and restart. Every feature works; inves
 - Specifications and results are stored locally in SQLite (`backend/data/sentinel.db`).
 - Consumer code is processed in memory and never written to the database.
 - Ollama runs locally; no hosted LLM API is contacted.
-- The privacy notice is visible in the upload page info callout and in `README.md`.
+- The privacy notice is in `README.md` (section *Data storage and privacy*).
 
 ---
 
-## 8. LLM mode with the local model (only if Ollama is running and `qwen3.5:4b` is pulled)
-Before the review: `ollama list` shows `qwen3.5:4b`, and `backend\.env` has `SENTINEL_LLM_PROVIDER=ollama`.
+## 8. LLM mode with the local model (only if Ollama is running and `qwen3.5:9b` is pulled)
+Before the review: `ollama list` shows `qwen3.5:9b`, and `backend\.env` has `SENTINEL_LLM_PROVIDER=ollama`.
 * Sidebar → the diagnostics rows: **Ollama reachable: passed**, **Model installed: passed** (with `tools` among the
   capabilities). Click **Test connection** once early: the first request loads the model into VRAM and can take a minute.
 * **Run self-test**. **Expect** A, B and C ✓ and "Real requests (not a test transport)". C shows the query the model chose,

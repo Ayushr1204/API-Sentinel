@@ -1,0 +1,146 @@
+swagger: '2.0'
+info:
+  title: Bookings API
+  version: 2.0.0
+  description: Room bookings for the StayFlow property platform (sample).
+host: api.stayflow.example
+basePath: /v1
+schemes:
+- https
+consumes:
+- application/json
+produces:
+- application/json
+securityDefinitions:
+  apiKey:
+    type: apiKey
+    in: header
+    name: X-API-Key
+security:
+- apiKey: []
+paths:
+  /bookings:
+    get:
+      operationId: listBookings
+      parameters:
+      - name: status
+        in: query
+        type: string
+        enum:
+        - pending
+        - confirmed
+        - cancelled
+        - no_show
+      - name: limit
+        in: query
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      - name: tags
+        in: query
+        type: array
+        items:
+          type: string
+        collectionFormat: csv
+      - name: propertyId
+        in: query
+        required: true
+        type: string
+      responses:
+        '200':
+          description: Bookings
+          schema:
+            type: array
+            items: &id001
+              $ref: '#/definitions/Booking'
+          headers:
+            X-Total-Count:
+              type: integer
+    post:
+      operationId: createBooking
+      parameters:
+      - name: booking
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/NewBooking'
+      responses:
+        '201':
+          description: Created
+          schema: *id001
+        '400':
+          description: Invalid booking
+  /bookings/{bookingId}:
+    parameters:
+    - name: bookingId
+      in: path
+      required: true
+      type: string
+    get:
+      operationId: getBooking
+      responses:
+        '200':
+          description: Booking
+          schema: *id001
+        '404':
+          description: Not found
+    delete:
+      operationId: cancelBooking
+      responses:
+        '204':
+          description: Cancelled
+definitions:
+  Booking:
+    type: object
+    required:
+    - id
+    - guest
+    - nights
+    - status
+    properties:
+      id:
+        type: string
+      guest:
+        type: string
+        maxLength: 80
+      nights:
+        type: integer
+        minimum: 0
+        exclusiveMinimum: true
+      status:
+        type: string
+        enum:
+        - pending
+        - confirmed
+        - cancelled
+        - no_show
+      checkIn:
+        type: string
+        format: date
+      notes:
+        type: string
+        x-nullable: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+  NewBooking:
+    type: object
+    required:
+    - guest
+    - nights
+    - checkIn
+    properties:
+      guest:
+        type: string
+        maxLength: 50
+      nights:
+        type: integer
+        minimum: 0
+        exclusiveMinimum: true
+      checkIn:
+        type: string
+        format: date
+      notes:
+        type: string
+        x-nullable: true

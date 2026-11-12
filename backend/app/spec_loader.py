@@ -1,4 +1,7 @@
-"""Parse and validate OpenAPI 3.0.x / 3.1.x documents."""
+"""Parse and validate Swagger 2.0 and OpenAPI 3.0.x / 3.1.x / 3.2.x documents.
+
+Each document is validated against the schema of its own version, then converted into the internal OpenAPI 3.1
+model (see convert.py) so that any pair can be compared in either direction."""
 from __future__ import annotations
 
 import json
@@ -7,12 +10,17 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import yaml
-from openapi_spec_validator import OpenAPIV30SpecValidator, OpenAPIV31SpecValidator
+from openapi_spec_validator import (OpenAPIV2SpecValidator, OpenAPIV30SpecValidator, OpenAPIV31SpecValidator,
+                                    OpenAPIV32SpecValidator)
 
 from .config import settings
+from .convert import format_label, spec_family, to_internal
 from .oas import RefError, iter_refs, operations, resolve_pointer
 
-_VERSION_RE = re.compile(r"^3\.(0|1)\.\d+$")
+_VERSION_RE = re.compile(r"^3\.(0|1|2)\.\d+$")
+SUPPORTED = "Swagger 2.0 or OpenAPI 3.0.x, 3.1.x, 3.2.x"
+VALIDATORS = {"2.0": OpenAPIV2SpecValidator, "3.0": OpenAPIV30SpecValidator, "3.1": OpenAPIV31SpecValidator,
+              "3.2": OpenAPIV32SpecValidator}
 MAX_ERRORS = 50
 
 
@@ -26,7 +34,8 @@ class ValidationIssue:
 class LoadedSpec:
     valid: bool
     filename: str
-    openapi_version: str | None = None
+    openapi_version: str | None = None   # the document's own version string ("2.0" for Swagger)
+    spec_format: str | None = None       # "Swagger 2.0", "OpenAPI 3.1.0", ...
     title: str | None = None
     api_version: str | None = None
     doc: dict | None = None
@@ -38,6 +47,7 @@ class LoadedSpec:
             "valid": self.valid,
             "filename": self.filename,
             "openapi_version": self.openapi_version,
+            "spec_format": self.spec_format,
             "title": self.title,
             "api_version": self.api_version,
             "errors": [e.__dict__ for e in self.errors],
@@ -115,20 +125,25 @@ def load_spec(raw: bytes | str, filename: str = "spec") -> LoadedSpec:
         result.errors.append(ValidationIssue("Top level of the document must be an object"))
         return result
 
-    # Scope guard: only OpenAPI 3.0 / 3.1.
-    if "swagger" in doc:
-        result.errors.append(ValidationIssue(
-            f"Swagger {doc.get('swagger')} is not supported. Convert to OpenAPI 3.0/3.1 first."))
-        return result
+    # Scope guard: Swagger 2.0 and OpenAPI 3.0-3.2 only.
     if "asyncapi" in doc:
         result.errors.append(ValidationIssue("AsyncAPI documents are out of scope"))
         return result
-    version = str(doc.get("openapi", ""))
+    family, version = spec_family(doc)
     result.openapi_version = version or None
-    if not _VERSION_RE.match(version):
+    if family == "swagger":
+        if version != "2.0":
+            result.errors.append(ValidationIssue(
+                f"Swagger version '{version}' is not supported. Expected {SUPPORTED}.", "swagger"))
+            return result
+        major_minor = "2.0"
+    elif _VERSION_RE.match(version):
+        major_minor = version[:3]
+    else:
         result.errors.append(ValidationIssue(
-            f"Unsupported or missing 'openapi' version '{version}'. Expected 3.0.x or 3.1.x.", "openapi"))
+            f"Unsupported or missing 'openapi' version '{version}'. Expected {SUPPORTED}.", "openapi"))
         return result
+    result.spec_format = format_label(family, version)
     info = doc.get("info") if isinstance(doc.get("info"), dict) else {}
     result.title = info.get("title")
     result.api_version = str(info.get("version")) if info.get("version") is not None else None
@@ -147,7 +162,7 @@ def load_spec(raw: bytes | str, filename: str = "spec") -> LoadedSpec:
     if result.errors:
         return result
 
-    validator_cls = OpenAPIV31SpecValidator if version.startswith("3.1") else OpenAPIV30SpecValidator
+    validator_cls = VALIDATORS[major_minor]
     try:
         for err in validator_cls(doc).iter_errors():
             loc = "/".join(str(p) for p in err.path) if getattr(err, "path", None) else ""
@@ -161,15 +176,16 @@ def load_spec(raw: bytes | str, filename: str = "spec") -> LoadedSpec:
         return result
 
     try:
-        ops = list(operations(doc))
-    except RefError as exc:
-        result.errors.append(ValidationIssue(str(exc)))
+        internal = to_internal(doc)
+        ops = list(operations(internal))
+    except (RefError, ValueError, TypeError, AttributeError, KeyError) as exc:
+        result.errors.append(ValidationIssue(f"Could not convert the {result.spec_format} document: {exc}"))
         return result
     result.valid = True
-    result.doc = doc
+    result.doc = internal
     result.stats = {
-        "paths": len(doc.get("paths") or {}),
+        "paths": len(internal.get("paths") or {}),
         "operations": len(ops),
-        "schemas": len(((doc.get("components") or {}).get("schemas")) or {}),
+        "schemas": len(((internal.get("components") or {}).get("schemas")) or {}),
     }
     return result

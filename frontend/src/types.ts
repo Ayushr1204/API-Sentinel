@@ -5,6 +5,7 @@ export interface SpecSummary {
   valid: boolean
   filename: string
   openapi_version: string | null
+  spec_format?: string | null
   title: string | null
   api_version: string | null
   errors: { message: string; location: string }[]
@@ -85,6 +86,60 @@ export interface Analysis {
   investigation?: Investigation | null
   reviews: Review[]
   review_policy: ReviewPolicy
+  ground_truth?: GroundTruth | null
+}
+
+export interface ExpectedChange {
+  rule: string
+  severity: Severity
+  operation?: string | null
+  field?: string | null
+  direction?: 'request' | 'response' | 'surface'
+  why?: string
+}
+
+export interface GroundTruthRow {
+  expected: ExpectedChange
+  status: 'matched' | 'severity_mismatch' | 'missed'
+  change_id: string | null
+  actual_severity: Severity | null
+}
+
+export interface InvestigationGroundTruth {
+  expected_decision: Decision
+  actual_decision: Decision | null
+  decision_match: boolean
+  note: string
+}
+
+export interface GroundTruth {
+  expected_decision: Decision
+  actual_decision: Decision
+  decision_match: boolean
+  decision_after_investigation: Decision | null
+  rationale: string
+  changes: GroundTruthRow[]
+  unexpected: { change_id: string; rule: string; severity: Severity; location: string }[]
+  counts: { expected: number; matched: number; severity_mismatch: number; missed: number; unexpected: number }
+  precision: number
+  recall: number
+  pass: boolean
+  investigation?: InvestigationGroundTruth | null
+}
+
+export interface SampleCase {
+  sample: string
+  base_format: string
+  candidate_format: string
+  expected_decision: Decision
+  decision: Decision
+  decision_match: boolean
+  counts: GroundTruth['counts']
+  precision: number
+  recall: number
+  investigation: InvestigationGroundTruth | null
+  pass: boolean
+  problems: string[]
 }
 
 export interface ReviewPolicy {
@@ -180,6 +235,7 @@ export interface EvaluationReport {
     baselines?: GateBaseline[]
   }
   agent: { cases: AgentCase[]; metrics: Record<string, number | string | null>; comparison?: AgentComparison[] }
+  samples?: { cases: SampleCase[]; metrics: Record<string, number> }
 }
 
 export interface AgentComparison {
@@ -266,6 +322,8 @@ export interface Sample {
   name: string
   description: string
   context_files: string[]
+  formats?: { base: string | null; candidate: string | null }
+  expected?: { decision: Decision; decision_after_investigation: Decision | null; changes: number } | null
 }
 
 export interface Finding {
@@ -385,6 +443,7 @@ export interface Investigation {
   duration_ms: number
   context_files: string[]
   target_url: string | null
+  ground_truth?: InvestigationGroundTruth | null
   evidence_chunks: number
   plan: { targets: { change_id: string; why: string }[]; skipped: string[] }
   records: AgentRecord[]

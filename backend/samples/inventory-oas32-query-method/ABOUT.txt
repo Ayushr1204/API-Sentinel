@@ -1,0 +1,1 @@
+Inventory API 5.0 -> 5.1 (OpenAPI 3.2 on both sides): adds an HTTP QUERY search operation (new in OpenAPI 3.2) and makes a room's floor nullable, which existing readers may not expect. Expected: HUMAN_REVIEW.

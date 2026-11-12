@@ -10,7 +10,7 @@ rem    2. install frontend packages (first run, or when package-lock.json change
 rem    3. rebuild the web UI when its source files changed
 rem    4. start the app on http://127.0.0.1:8000 and the demo deployment on :8100
 rem    5. open your browser when the app is ready
-rem  Stop everything with Ctrl+C in this window.
+rem  Stop everything with Ctrl+C in this window, or just close the window.
 rem  Options:  start.bat --rebuild   force a fresh UI build
 rem            set SENTINEL_PORT=8001 before running to use another port
 rem ===========================================================================
@@ -85,7 +85,7 @@ copy /y "package-lock.json" "node_modules\.sentinel-lock" >nul
 if defined FORCE_BUILD goto :build
 if not exist "dist\index.html" goto :build
 rem Rebuild only if any UI source file is newer than the last build.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$built = (Get-Item 'dist\index.html').LastWriteTime; $newest = Get-ChildItem -Path 'src','index.html','package.json','vite.config.ts' -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($newest.LastWriteTime -gt $built) { exit 1 } else { exit 0 }" >nul 2>nul && goto :have_build
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$built = (Get-Item 'dist\index.html').LastWriteTime; $newest = Get-ChildItem -Path 'src','public','index.html','package.json','vite.config.ts' -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($newest.LastWriteTime -gt $built) { exit 1 } else { exit 0 }" >nul 2>nul && goto :have_build
 :build
 echo [setup] Building the web interface...
 call npm run build || (
@@ -119,12 +119,15 @@ if defined PORT_PID (
 :port_free
 
 rem ---------------------------------------------------------------- 4. Start
+rem Older versions of this script left the demo deployment running after Ctrl+C. Stop such a leftover
+rem (a python.exe on the demo port); anything else on that port is left alone.
 call :port_pid %DEMO_PORT%
 if defined PORT_PID (
-  echo [info]  Port %DEMO_PORT% is busy, so the demo deployment is not started.
-) else (
-  start "" /b "%PY%" -m uvicorn demo_target.petstore_v2:app --host 127.0.0.1 --port %DEMO_PORT% --log-level warning
-  echo [ok]    Demo deployment for live tests: http://127.0.0.1:%DEMO_PORT%/v1
+  tasklist /fi "PID eq %PORT_PID%" /nh 2>nul | findstr /i "python" >nul && (
+    echo [info]  Stopping a leftover demo deployment on port %DEMO_PORT% ^(process %PORT_PID%^).
+    taskkill /pid %PORT_PID% /f >nul 2>nul
+    timeout /t 1 /nobreak >nul
+  )
 )
 
 if exist "%BACKEND%\.env" (
@@ -139,14 +142,13 @@ start "" /min powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden 
 echo.
 echo  API Sentinel is starting at %URL%
 echo  Your browser opens automatically when it is ready.
-echo  Press Ctrl+C in this window to stop everything.
+echo  Press Ctrl+C in this window (or close it) to stop everything.
+echo  If Windows then asks "Terminate batch job (Y/N)?", either answer is fine.
 echo.
-"%PY%" -m uvicorn app.main:app --host 127.0.0.1 --port %PORT%
+rem The app and the demo deployment run in ONE Python process (serve.py), so stopping it frees both ports;
+rem nothing is left to clean up afterwards, whatever the answer to the prompt above.
+"%PY%" serve.py --port %PORT% --demo-port %DEMO_PORT%
 set "SERVER_EXIT=%ERRORLEVEL%"
-
-rem uvicorn has exited (Ctrl+C or an error): stop the demo deployment if it is still running.
-call :port_pid %DEMO_PORT%
-if defined PORT_PID taskkill /pid %PORT_PID% /f >nul 2>nul
 if not "%SERVER_EXIT%"=="0" (
   echo.
   echo [error] The server stopped with exit code %SERVER_EXIT%. See the messages above.

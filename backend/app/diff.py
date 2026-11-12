@@ -10,6 +10,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .convert import SOURCE_KEY, version_tuple
 from .oas import deref, is_oas31, normalize_path, operations, param_key, schema_types
 
 BREAKING = "BREAKING"
@@ -62,6 +63,15 @@ class Change:
         return d
 
 
+def _serialization(param: dict, attr: str) -> Any:
+    """Effective OpenAPI style/explode of a parameter (defaults per OpenAPI 3: form for query/cookie, simple for
+    path/header; explode defaults to true only for form)."""
+    style = param.get("style") or ("form" if param.get("in") in ("query", "cookie") else "simple")
+    if attr == "style":
+        return style
+    return param["explode"] if "explode" in param else style == "form"
+
+
 def _jsonable(v: Any) -> str:
     return json.dumps(v, sort_keys=True, default=str)
 
@@ -74,6 +84,7 @@ class Differ:
 
     # ------------------------------------------------------------------ public
     def run(self) -> list[Change]:
+        self._format()
         self._servers()
         self._security_schemes()
         self._operations()
@@ -97,6 +108,20 @@ class Differ:
         self.changes.append(Change(**kw))
 
     # ------------------------------------------------------------------ surface
+    def _format(self) -> None:
+        """Different spec formats are compared after conversion to one model (convert.py); say so, once."""
+        b, c = self.base.get(SOURCE_KEY) or {}, self.cand.get(SOURCE_KEY) or {}
+        if not b or not c or b.get("label") == c.get("label"):
+            return
+        bv = (0, 0) if b.get("format") == "swagger" else version_tuple(b.get("version", ""))
+        cv = (0, 0) if c.get("format") == "swagger" else version_tuple(c.get("version", ""))
+        direction = "an upgrade" if cv > bv else "a downgrade" if cv < bv else "a patch-level change"
+        self.add(rule="SPEC_FORMAT_CHANGED", severity=NON_BREAKING, direction="surface", area="document",
+                 message=f"Specification format changed from {b.get('label')} to {c.get('label')} ({direction}). "
+                         "Both documents were converted to one internal model before comparing, so only real "
+                         "contract changes are listed.",
+                 before=b.get("label"), after=c.get("label"))
+
     def _servers(self) -> None:
         b = {s.get("url") for s in self.base.get("servers") or [] if isinstance(s, dict)}
         c = {s.get("url") for s in self.cand.get("servers") or [] if isinstance(s, dict)}
@@ -227,10 +252,11 @@ class Differ:
                 self.add(rule="PARAM_BECAME_OPTIONAL", severity=NON_BREAKING, direction="request",
                          message=f"{key[0]} parameter '{key[1]}' is now optional.", before=True, after=False, **pctx)
             for attr in ("style", "explode"):
-                if b.get(attr) != c.get(attr):
+                bv, cv = _serialization(b, attr), _serialization(c, attr)
+                if bv != cv:  # compared by effective value: an explicit default is not a change
                     self.add(rule="PARAM_SERIALIZATION_CHANGED", severity=POTENTIAL, direction="request",
                              message=f"Serialization '{attr}' of parameter '{key[1]}' changed.",
-                             before=b.get(attr), after=c.get(attr), **pctx)
+                             before=bv, after=cv, **pctx)
             if not b.get("deprecated") and c.get("deprecated"):
                 self.add(rule="PARAM_DEPRECATED", severity=NON_BREAKING, direction="request",
                          message=f"Parameter '{key[1]}' marked deprecated.", **pctx)
@@ -428,7 +454,8 @@ class Differ:
         # (keyword, True if larger value = looser)
         for kw, larger_looser in (("maxLength", True), ("maxItems", True), ("maximum", True),
                                   ("maxProperties", True), ("minLength", False), ("minItems", False),
-                                  ("minimum", False), ("minProperties", False)):
+                                  ("minimum", False), ("minProperties", False),
+                                  ("exclusiveMaximum", True), ("exclusiveMinimum", False)):
             bv, cv = b.get(kw), c.get(kw)
             if bv == cv or not (isinstance(bv, (int, float, type(None))) and isinstance(cv, (int, float, type(None)))):
                 continue

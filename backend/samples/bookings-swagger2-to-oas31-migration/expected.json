@@ -1,0 +1,13 @@
+{
+  "decision": "PROCEED",
+  "rationale": "A format migration alone changes nothing on the wire; the only finding should be the format change itself.",
+  "changes": [
+    {
+      "rule": "SPEC_FORMAT_CHANGED",
+      "severity": "NON_BREAKING",
+      "operation": null,
+      "field": null,
+      "why": "Swagger 2.0 to OpenAPI 3.1.0, an upgrade."
+    }
+  ]
+}

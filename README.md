@@ -1,6 +1,6 @@
 # API Sentinel
 
-**A release gate for REST APIs.** Give it the OpenAPI 3.0/3.1 spec your clients use today (the *baseline*) and the
+**A release gate for REST APIs.** Give it the API spec your clients use today (Swagger 2.0 or OpenAPI 3.0, 3.1 or 3.2) (the *baseline*) and the
 one you plan to ship (the *candidate*). API Sentinel:
 1. Detects every structural change.
 2. Runs a targeted compatibility test for each change.
@@ -29,7 +29,9 @@ Double-click **`start.bat`** in the project folder.
   - Rebuilds the UI when its sources changed.
   - Starts the app and the demo deployment.
   - Opens **http://127.0.0.1:8000** in your browser once the server answers.
-- **Stopping:** press Ctrl+C in its window.
+- **Stopping:** press Ctrl+C in its window, or close the window. The app and the demo deployment run in one
+  process (`backend\serve.py`), so both ports (8000 and 8100) are freed either way. If Windows asks
+  "Terminate batch job (Y/N)?", either answer is fine.
 - **Options:** `start.bat --rebuild` forces a UI build. `set SENTINEL_PORT=8001` before running uses another port.
 - **Port 8000 busy:** if an older instance is still running, it asks whether to stop it, just open the browser, or quit.
 
@@ -77,13 +79,16 @@ configured, and you can force it with `SENTINEL_LLM=off`. The diff, contract tes
 use the LLM. The only supported model runtime is **[Ollama](https://ollama.com), running locally**: no key, no
 credits, and consumer code never leaves your machine.
 
-**Model choice for an RTX 3060 Laptop (6 GB VRAM) + i7-12700H: `qwen3.5:4b`**
-- About 3.4 GB to download; the Ollama library lists it with **tools** (function calling) and **thinking**, so the
-  model's own tool calls drive API Sentinel's evidence search. Small enough to stay on a 6 GB GPU with an 8K context.
+**Default model: `qwen3.5:9b`** (Apache 2.0, open weights)
+- About 6.6 GB to download; the Ollama library lists it with **tools** (function calling) and **thinking**, so the
+  model's own tool calls drive API Sentinel's evidence search. It is noticeably better than the 4B model at reading
+  consumer code and at following the structured-assessment schema.
+- On an RTX 3060 Laptop (6 GB VRAM) it does **not** fit entirely on the GPU: Ollama keeps part of it in system RAM
+  and runs that part on the CPU (`ollama ps` shows a CPU/GPU split). It works, but each assessment is slower, so the
+  default request timeout is 300 s. Close other GPU-heavy apps and keep about 10 GB of system RAM free.
 - Thinking is off by default (`OLLAMA_THINK=false`): it is slower and API Sentinel verifies every claim itself.
-- Alternatives if it is slow or does not fit: `granite4:3b` (about 2.1 GB, trained for tool calling) or `qwen3:4b`
-  (about 2.5 GB). Avoid 8B+ models on 6 GB VRAM unless you accept CPU offload (much slower), and 20B+ models entirely.
-- Plan on at least 8 GB of system RAM free for the model runner on top of the browser and the app.
+- Faster alternatives that fit fully in 6 GB: `qwen3.5:4b` (about 3.4 GB, the previous default) or `granite4:3b`
+  (about 2.1 GB, trained for tool calling). Change `OLLAMA_MODEL`; nothing else changes.
 
 1. **Install Ollama** from https://ollama.com/download/windows (run `OllamaSetup.exe`; no admin rights needed). It
    starts in the background and listens on `http://localhost:11434`. Check in a new Command Prompt:
@@ -92,22 +97,22 @@ credits, and consumer code never leaves your machine.
    curl http://localhost:11434/api/version
    ```
    If the second command cannot connect, start the **Ollama** app from the Start menu (or run `ollama serve`).
-2. **Download the model once** (about 3.4 GB; API Sentinel never downloads models itself):
+2. **Download the model once** (about 6.6 GB; API Sentinel never downloads models itself):
    ```bat
-   ollama pull qwen3.5:4b
+   ollama pull qwen3.5:9b
    ollama list
-   ollama run qwen3.5:4b "Reply with OK"
+   ollama run qwen3.5:9b "Reply with OK"
    ```
-   `ollama list` must show `qwen3.5:4b`. While the last command runs, `ollama ps` shows how much is on the GPU
-   (`100% GPU` is ideal; a CPU share means it did not fit).
+   `ollama list` must show `qwen3.5:9b`. While the last command runs, `ollama ps` shows how much is on the GPU
+   (on a 6 GB card expect a CPU/GPU split for the 9B model; that is slower but works).
 3. **Configure it.** Open `backend\.env` in Notepad and set:
    ```
    SENTINEL_LLM_PROVIDER=ollama
    OLLAMA_BASE_URL=http://localhost:11434
-   OLLAMA_MODEL=qwen3.5:4b
+   OLLAMA_MODEL=qwen3.5:9b
    ```
    Optional tuning (defaults shown): `OLLAMA_NUM_CTX=8192` (context tokens; Ollama's own default of 4096 would cut
-   the evidence), `OLLAMA_TIMEOUT=180` (seconds per request; the first one includes loading the model),
+   the evidence), `OLLAMA_TIMEOUT=300` (seconds per request; the first one includes loading the model),
    `OLLAMA_THINK=false`, `OLLAMA_KEEP_ALIVE=10m`, `SENTINEL_LLM_TEMPERATURE=0`. `LLM_PROVIDER=ollama` is accepted as
    an alias of `SENTINEL_LLM_PROVIDER`.
 4. **Restart** (double-click `start.bat`). Starting the app never starts Ollama or downloads anything.
@@ -184,11 +189,12 @@ In `frontend`, run the typecheck, lint and production build:
 cd ..\frontend
 npx tsc -b
 npm run lint
+npm test
 npm run build
 ```
 `demo.py` uses a throw-away database and starts the demo deployment itself. Its steps:
-1. Analyse all five samples.
-2. Refuse out-of-scope uploads.
+1. Analyse every bundled sample and check it against its ground truth (`expected.json`).
+2. Accept Swagger 2.0 and OpenAPI 3.2, refuse out-of-scope uploads (Swagger 1.x, AsyncAPI).
 3. Escalate with cited evidence, and recover buried evidence with a bounded retry.
 4. Replay calls against the live demo deployment, and check the SSRF guard.
 5. Enforce the review rules.
@@ -201,14 +207,14 @@ npm run build
 | `Failed to build 'uvloop'` during `pip install` | Fixed in `requirements.txt` (uvloop is Linux/macOS-only and is now skipped on Windows). Make sure you have the current file. |
 | pip installs into `AppData\Roaming\Python` | The venv is not active: run `.venv\Scripts\activate.bat`. |
 | Sidebar: **Ollama reachable: unavailable** / `unavailable: Ollama is not reachable at http://localhost:11434` | Ollama is not installed or not running. Install it (link above) or start the Ollama app / `ollama serve`. Check with `curl http://localhost:11434/api/version`. Investigations finish in rules mode meanwhile. |
-| **Model installed: failed** / `model_missing` | Run `ollama pull qwen3.5:4b` (or the model in `OLLAMA_MODEL`); the exact command is shown. `ollama list` shows what is installed; names must match, including the tag. |
+| **Model installed: failed** / `model_missing` | Run `ollama pull qwen3.5:9b` (or the model in `OLLAMA_MODEL`); the exact command is shown. `ollama list` shows what is installed; names must match, including the tag. |
 | `timeout` with Ollama | The first request loads the model (can take a minute); click **Test connection** again. If it keeps timing out the model is too slow on this machine: check `ollama ps` (a CPU share means it spilled out of VRAM), use `granite4:3b`, lower `OLLAMA_NUM_CTX` to 4096, or raise `OLLAMA_TIMEOUT`. A timeout is never treated as evidence of a break. |
 | `resources` with Ollama ("requires more system memory", CUDA out of memory) | Not enough RAM/VRAM for that model and context. Close other GPU apps, use a smaller model, or lower `OLLAMA_NUM_CTX`. |
 | `model_error` / `bad_response` with Ollama | The runner crashed or the model's reply was empty or not valid JSON. The reply is rejected and rules decide; try again, or a different model. `ollama serve` logs show the cause. |
 | `SENTINEL_LLM_PROVIDER='…' is not supported` | Only `ollama` is supported. Set `SENTINEL_LLM_PROVIDER=ollama`, or remove the line for rules-only mode. |
 | Self-test **C** says the model answered without calling `search_evidence` | The model chose not to use tools on that run (a capability limit, not an app error). Assessments still work; try again or another tool-capable model. |
 | Blank page at :8000 | Run `npm run build` in `frontend`, then restart uvicorn. |
-| Port in use | `uvicorn app.main:app --port 8001`, then open that port. |
+| Port in use | `start.bat` offers to stop an old API Sentinel on port 8000 and stops a leftover demo deployment on 8100 by itself. To find what holds a port: `netstat -ano \| findstr :8100`, then `taskkill /pid <PID> /f`. Or use another port: `set SENTINEL_PORT=8001` then `start.bat`. |
 
 ---
 
@@ -220,6 +226,18 @@ npm run build
 | `invoices-type-change` | Response type change (`amount` number → string), request type change, removed endpoint, new required query parameter | Block |
 | `orders-31-review` (OAS 3.1) | New enum value, nullable field, renamed operationId: insufficient evidence for a verdict | Review → Block with consumer code; Review without |
 | `orders-31-noisy-consumers` | Same, with the real consumer buried among six unrelated services: shows the bounded retry | Review → Block |
+| `payments-auth-change` (OAS 3.0) | API key replaced by OAuth2, a request field tightened, a refund status added | Block |
+| `users-additive-oas31` | Only additive changes: new optional fields, an optional query parameter, a new endpoint | Proceed |
+| `inventory-oas32-query-method` (OAS 3.2) | A new `QUERY` operation and response fields that can now be `null` | Review |
+| `bookings-swagger2-to-oas31-migration` | The same API rewritten from Swagger 2.0 to OpenAPI 3.1: format change only | Proceed |
+| `bookings-swagger2-to-oas32-release` | Upgrade Swagger 2.0 → OpenAPI 3.2 **and** ship v2 (new required filter, tighter name limit, new enum value, new endpoint) | Block |
+| `bookings-oas31-to-oas30-downgrade` | Downgrade OpenAPI 3.1 → 3.0 while shipping v2 | Block |
+| `bookings-oas32-to-swagger2-rollback` | Roll v2 back to v1 while converting OpenAPI 3.2 → Swagger 2.0 (new → old) | Block |
+
+**Ground truth.** Every sample folder has an `expected.json`: the changes a reviewer expects (rule, operation, field,
+severity), the expected decision, and for samples with consumer code the expected decision after investigation. The
+analysis page shows predicted vs expected (matched, wrong severity, missed, unexpected), and **Evaluation** scores all
+samples. To label your own pair, add a folder with `base.yaml`, `candidate.yaml`, `ABOUT.txt` and `expected.json`.
 
 ## How it decides (short version)
 * **Contract tests:** request tests build what an *old client sends* from the baseline and validate it against the
@@ -243,19 +261,20 @@ Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 | Slot | Meaning |
 |------|---------|
-| **Baseline** | The OpenAPI contract existing clients were built against — the API version live in production today. |
-| **Candidate** | The updated OpenAPI contract being evaluated for release — the version you intend to ship. |
+| **Baseline** | The API contract existing clients were built against — the API version live in production today. |
+| **Candidate** | The updated API contract being evaluated for release — the version you intend to ship. |
 
-**Supported formats:** OpenAPI 3.0.x or 3.1.x specification files in JSON (`.json`) or YAML (`.yaml`, `.yml`).
+**Supported formats:** Swagger 2.0 or OpenAPI 3.0.x, 3.1.x or 3.2.x specification files in JSON (`.json`) or YAML
+(`.yaml`, `.yml`). The two slots may use different versions, in either direction (see [Scope](#scope)).
 Each file must be a single bundled document (external `$ref`s are rejected and never fetched). Maximum size: **2 MB**
 per spec file.
 
-**Not accepted:** PDFs, screenshots, Word documents, source-code files, Swagger 2.0, AsyncAPI, GraphQL, gRPC, or
+**Not accepted:** PDFs, screenshots, Word documents, source-code files, Swagger 1.x, AsyncAPI, GraphQL, gRPC, or
 other API formats.
 
 **Server-side processing:** Uploaded files are sent to the backend for validation, comparison, contract testing, and
 optional investigation. Browser-side validation is preliminary; the server performs the authoritative checks (size
-limit, format parsing, YAML safety, OpenAPI version, node/nesting/alias limits). In the standard local setup, the
+limit, format parsing, YAML safety, Swagger/OpenAPI version, node/nesting/alias limits). In the standard local setup, the
 backend runs on your own machine.
 
 ---
@@ -273,7 +292,7 @@ API Sentinel is a **local-first** application. Everything runs on the machine wh
 | Consumer-code context | **In memory only** | Read during investigation, used for BM25 retrieval, then discarded. Filenames (not contents) are recorded in the investigation payload. |
 | LLM inference | **Local Ollama only** | No hosted LLM API is ever contacted. Ollama runs on `localhost`. |
 
-> **Privacy notice (also shown in the UI):**
+> **Privacy notice:**
 > API Sentinel processes uploaded specifications on the local application server. Specifications and analysis
 > results are stored in the local SQLite database so previous analyses can be reopened. Consumer-code context
 > (uploaded during investigation) is processed in memory and is not saved to that database. AI-assisted investigation
@@ -285,6 +304,9 @@ There is no authentication: run locally on `127.0.0.1`.
 ---
 
 ## Scope
-OpenAPI 3.0.x and 3.1.x only, single-file specs (external `$ref`s are rejected and never fetched). Swagger 2.0,
-AsyncAPI, GraphQL and gRPC are out of scope. There is no authentication: run locally on `127.0.0.1`.
+Swagger 2.0 and OpenAPI 3.0.x, 3.1.x and 3.2.x, in any pair and in either direction (upgrade, downgrade, or the
+same version). Each document is validated against its own version's schema, then converted to one internal model
+(OpenAPI 3.1 semantics) before comparing, so a format change alone is never reported as an API change; it appears as
+one non-breaking `SPEC_FORMAT_CHANGED` note. Single-file specs only (external `$ref`s are rejected and never fetched).
+Swagger 1.x, AsyncAPI, GraphQL and gRPC are out of scope. There is no authentication: run locally on `127.0.0.1`.
 "# API-Sentinel" 

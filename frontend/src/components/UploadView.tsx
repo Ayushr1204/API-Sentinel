@@ -15,14 +15,14 @@ const MAX_BYTES = 2 * 1024 * 1024
 const EXT = /\.(ya?ml|json)$/i
 
 function precheck(f: File): string | null {
-  if (!EXT.test(f.name)) return `${f.name} is not a .yaml, .yml or .json file. Only OpenAPI specifications in JSON (.json) or YAML (.yaml, .yml) format are accepted.`
+  if (!EXT.test(f.name)) return `${f.name} is not a .yaml, .yml or .json file.`
   if (f.size === 0) return `${f.name} is empty.`
   if (f.size > MAX_BYTES) return `${f.name} is ${(f.size / 1048576).toFixed(1)} MB; the limit is 2 MB.`
   return null
 }
 
-function SpecSlot(props: { step: number; title: string; hint: string; formatHint: string; state: SlotState; onFile: (f: File) => void }) {
-  const { step, title, hint, formatHint, state, onFile } = props
+function SpecSlot(props: { step: number; title: string; hint: string; state: SlotState; onFile: (f: File) => void }) {
+  const { step, title, hint, state, onFile } = props
   const input = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const s = state.summary
@@ -47,18 +47,17 @@ function SpecSlot(props: { step: number; title: string; hint: string; formatHint
         <Icon name="file" size={22} />
         <span>{state.file ? <><strong>{state.file.name}</strong> · choose another</> : <>Drop a YAML or JSON file, or <u>browse</u></>}</span>
       </div>
-      <p className="muted tiny" style={{ margin: '0.1rem 0 0' }}>{formatHint}</p>
       {state.checking && <p className="slot__status"><Spinner /> Validating {state.file?.name}…</p>}
       {state.error && <p className="slot__status error" role="alert">{state.error}</p>}
       {s && s.valid && (
         <div className="slot__status slot__status--ok">
           <p><Icon name="check" size={16} /> <strong>{s.title ?? 'Untitled API'}</strong> {s.api_version && <span className="muted">v{s.api_version}</span>}</p>
-          <p className="muted small">OpenAPI {s.openapi_version} · {s.stats.paths} paths · {s.stats.operations} operations · {s.stats.schemas} schemas</p>
+          <p className="muted small">{s.spec_format ?? `OpenAPI ${s.openapi_version}`} · {s.stats.paths} paths · {s.stats.operations} operations · {s.stats.schemas} schemas</p>
         </div>
       )}
       {s && !s.valid && (
         <div className="slot__status" role="alert">
-          <p className="error"><strong>{s.filename}</strong> is not a valid OpenAPI 3.0/3.1 document ({s.errors.length} problem{s.errors.length === 1 ? '' : 's'}).</p>
+          <p className="error"><strong>{s.filename}</strong> is not a valid Swagger 2.0 or OpenAPI 3.x document ({s.errors.length} problem{s.errors.length === 1 ? '' : 's'}).</p>
           <ul className="errors">
             {s.errors.slice(0, 6).map((e, i) => <li key={i}>{e.location && <code>{e.location}</code>} {e.message}</li>)}
           </ul>
@@ -69,11 +68,11 @@ function SpecSlot(props: { step: number; title: string; hint: string; formatHint
   )
 }
 
-function expected(desc: string): Decision | null {
-  const m = desc.match(/Expected: ([A-Z_]+)/)
-  if (!m) return null
-  const last = m[1]
-  return (['PROCEED', 'BLOCK', 'HUMAN_REVIEW'].includes(last) ? last : null) as Decision | null
+function expected(s: Sample): { decision: Decision; after: Decision | null } | null {
+  if (s.expected) return { decision: s.expected.decision, after: s.expected.decision_after_investigation }
+  const m = s.description.match(/Expected: ([A-Z_]+)/)  // older backends: read it from ABOUT.txt
+  if (!m || !['PROCEED', 'BLOCK', 'HUMAN_REVIEW'].includes(m[1])) return null
+  return { decision: m[1] as Decision, after: /then BLOCK after investigation/.test(s.description) ? 'BLOCK' : null }
 }
 
 export function UploadView({ onResult }: { onResult: (a: Analysis) => void }) {
@@ -112,20 +111,16 @@ export function UploadView({ onResult }: { onResult: (a: Analysis) => void }) {
   return (
     <main className="page">
       <PageHeader title="New comparison"
-        subtitle="Compare your current and proposed OpenAPI contracts. Sentinel detects structural changes, runs compatibility tests, and recommends Proceed, Review or Block. An optional investigation uses the LangGraph agent to search consumer code for evidence of impact." />
+        subtitle="Compare the API contract your clients use today (Swagger 2.0 or OpenAPI 3.0, 3.1, 3.2, in any combination) with the one you plan to release. Sentinel detects every structural change, runs a targeted compatibility test for each, and recommends Proceed, Review or Block. A person makes the final call." />
 
       <div className="slots">
-        <SpecSlot step={1} title="Baseline specification — Current API"
-          hint="The OpenAPI contract existing clients were built against. This is the API version live in production today."
-          formatHint="OpenAPI 3.0.x or 3.1.x · JSON (.json) or YAML (.yaml, .yml) · max 2 MB · e.g. orders-api-v2.yaml"
+        <SpecSlot step={1} title="Baseline: live today" hint="The contract existing clients were built against."
           state={base} onFile={check(setBase)} />
         <button type="button" className="slots__swap" title="Swap baseline and candidate" aria-label="Swap baseline and candidate"
           disabled={!base.file && !cand.file} onClick={() => { const b = base; setBase(cand); setCand(b) }}>
           <Icon name="swap" />
         </button>
-        <SpecSlot step={2} title="Candidate specification — Proposed API"
-          hint="The updated OpenAPI contract being evaluated for release. This is the version you intend to ship."
-          formatHint="OpenAPI 3.0.x or 3.1.x · JSON (.json) or YAML (.yaml, .yml) · max 2 MB · e.g. orders-api-v3.yaml"
+        <SpecSlot step={2} title="Candidate: to release" hint="The contract you intend to ship."
           state={cand} onFile={check(setCand)} />
       </div>
 
@@ -140,48 +135,28 @@ export function UploadView({ onResult }: { onResult: (a: Analysis) => void }) {
       </div>
       {error && <ErrorState title="Comparison failed" message={error} />}
 
-      <div className="callout callout--muted" style={{ marginTop: '1rem', fontSize: '0.82rem' }}>
-        <p style={{ margin: '0 0 0.4rem' }}>
-          <strong>What the analysis does:</strong> Structural comparison of every path, operation, parameter, schema and response between the two specs;
-          a targeted contract test for each detected change; and a release recommendation (Proceed, Review, or Block).
-          After comparison, you can optionally run an <strong>investigation</strong> that uses the LangGraph agent with BM25 evidence retrieval
-          over consumer code to assess real-world impact.
-        </p>
-        <p style={{ margin: '0 0 0.4rem' }}>
-          <strong>Accepted inputs:</strong> Valid OpenAPI 3.0.x or 3.1.x specification files in JSON or YAML format.
-          PDFs, screenshots, Word documents, source-code files, Swagger 2.0, AsyncAPI, and other API formats are <strong>not accepted</strong>.
-          Each file must be a single bundled document (external <code>$ref</code>s are rejected).
-        </p>
-        <p style={{ margin: '0 0 0.4rem' }}>
-          <strong>Server-side processing:</strong> Uploaded files are sent to the API Sentinel backend for validation,
-          comparison, contract testing, and optional investigation. Browser-side validation is preliminary; the server
-          performs the authoritative checks. In the standard local setup, the backend runs on your own machine.
-        </p>
-        <p style={{ margin: 0 }}>
-          <strong>Privacy notice:</strong> API Sentinel processes uploaded specifications on the local application server.
-          Specifications and analysis results are stored in the local SQLite database so previous analyses can be reopened.
-          Consumer-code context (uploaded during investigation) is processed in memory and is not saved to that database.
-          AI-assisted investigation uses a locally running Ollama model rather than a hosted LLM API.
-          Avoid uploading credentials, secrets, personal data, or proprietary material unless you are authorised to do so.
-        </p>
-      </div>
-
       <section className="section">
         <h2 className="section__h">Sample pairs</h2>
-        <p className="muted small section__sub">Bundled, offline examples with different expected outcomes. Some include consumer code for the investigation step. Use these if you do not have your own specifications.</p>
+        <p className="muted small section__sub">Bundled, offline examples with different expected outcomes and spec versions. Each ships a hand-written ground truth, and the result page scores the comparison against it. Some include consumer code for the investigation step.</p>
         {samplesError && <ErrorState title="Could not load samples" message={samplesError} onRetry={loadSamples} />}
         {!samples && !samplesError && <Loading label="Loading samples…" />}
         {samples && (
           <div className="cards">
             {samples.map((s) => {
-              const exp = expected(s.description)
+              const exp = expected(s)
+              const fmt = s.formats
               return (
                 <article key={s.name} className="card">
                   <header className="card__head">
                     <code className="card__title">{s.name}</code>
-                    {exp && <span className="card__exp">Expected <DecisionWord d={exp} />
-                      {/then BLOCK after investigation/.test(s.description) && <>, then <DecisionWord d="BLOCK" /> after investigation</>}</span>}
+                    {exp && <span className="card__exp">Expected <DecisionWord d={exp.decision} />
+                      {exp.after && exp.after !== exp.decision && <>, then <DecisionWord d={exp.after} /> after investigation</>}</span>}
                   </header>
+                  {fmt?.base && fmt.candidate && (
+                    <p className="card__formats tiny">
+                      <span className="pill">{fmt.base}</span> → <span className="pill">{fmt.candidate}</span>
+                    </p>
+                  )}
                   <p className="card__body">{s.description.replace(/\s*Expected:.*$/, '')}</p>
                   <footer className="card__foot">
                     <span className="muted tiny">

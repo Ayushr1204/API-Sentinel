@@ -1,0 +1,61 @@
+{
+  "decision": "BLOCK",
+  "rationale": "Every existing client authenticates with an X-API-Key header; after the change the same scheme name expects a bearer token, so every call fails until clients are rebuilt.",
+  "changes": [
+    {
+      "rule": "SECURITY_SCHEME_CHANGED",
+      "severity": "BREAKING",
+      "operation": null,
+      "field": null,
+      "why": "apiKey header -> HTTP bearer under the same scheme name."
+    },
+    {
+      "rule": "OPTIONAL_PARAM_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /payments",
+      "field": "idempotency-key",
+      "direction": "request",
+      "why": "Optional header; old clients omit it."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /payments",
+      "field": "currency",
+      "direction": "request",
+      "why": "Requests may now use GBP; old requests stay valid."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "POST /payments",
+      "field": "currency",
+      "direction": "response",
+      "why": "Responses may carry GBP."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "POST /payments",
+      "field": "status",
+      "direction": "response",
+      "why": "Responses may carry 'refunded'."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /payments/{paymentId}",
+      "field": "currency",
+      "direction": "response",
+      "why": "Responses may carry GBP."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /payments/{paymentId}",
+      "field": "status",
+      "direction": "response",
+      "why": "Responses may carry 'refunded'."
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "decision": "PROCEED",
+  "rationale": "Only additions and a loosened request limit; nothing an existing client sends or reads changes meaning.",
+  "changes": [
+    {
+      "rule": "OPTIONAL_PARAM_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /users",
+      "field": "role",
+      "direction": "request",
+      "why": "Optional filter."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /users",
+      "field": "avatarUrl",
+      "direction": "response",
+      "why": "New response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /users/{userId}",
+      "field": "avatarUrl",
+      "direction": "response",
+      "why": "New response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "PATCH /users/{userId}",
+      "field": "avatarUrl",
+      "direction": "response",
+      "why": "New response field."
+    },
+    {
+      "rule": "CONSTRAINT_LOOSENED",
+      "severity": "NON_BREAKING",
+      "operation": "PATCH /users/{userId}",
+      "field": "displayName",
+      "direction": "request",
+      "why": "maxLength 60 -> 120 accepts every old value."
+    },
+    {
+      "rule": "PATH_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /users/{userId}/sessions",
+      "field": null,
+      "why": "New endpoint."
+    }
+  ]
+}

@@ -26,6 +26,18 @@ export function Icon({ name, size = 18 }: { name: keyof typeof ICONS | string; s
   )
 }
 
+/** The API Sentinel mark (concept A, "contract gate"): a sentinel standing between the two brackets of a contract. */
+export function LogoMark({ size = 28, accent = 'currentColor' }: { size?: number; accent?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 17 L8 32 L21 47" stroke="currentColor" strokeWidth={6} />
+      <path d="M43 17 L56 32 L43 47" stroke="currentColor" strokeWidth={6} />
+      <path d="M32 25 V52" stroke={accent} strokeWidth={6.5} />
+      <circle cx="32" cy="13" r="5.5" fill={accent} />
+    </svg>
+  )
+}
+
 export function PageHeader({ title, subtitle, actions, eyebrow }: {
   title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode
 }) {

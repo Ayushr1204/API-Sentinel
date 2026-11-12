@@ -63,6 +63,7 @@ const RULES: Record<string, string> = {
   PROPERTY_BECAME_REQUIRED: 'Field now required',
   PROPERTY_BECAME_OPTIONAL: 'Field now optional',
   COMPOSITION_CHANGED: 'oneOf/anyOf changed',
+  SPEC_FORMAT_CHANGED: 'Spec format changed',
 }
 
 export const ruleLabel = (rule: string) => RULES[rule] ?? rule
@@ -105,6 +106,7 @@ const WHY: Record<string, string> = {
   PROPERTY_BECAME_REQUIRED: 'Clients that omit the field will be rejected.',
   PROPERTY_BECAME_OPTIONAL: 'Responses may omit a field clients rely on.',
   COMPOSITION_CHANGED: 'The set of accepted shapes changed, so some existing messages may no longer match.',
+  SPEC_FORMAT_CHANGED: 'Only the document format changed (for example Swagger 2.0 to OpenAPI 3.1). Both sides were converted to one model before comparing, so clients see no difference from the format itself; every real API change is listed separately.',
 }
 export const ruleWhy = (rule: string, severity: string) =>
   WHY[rule] ?? (severity === 'NON_BREAKING' ? 'Additive or relaxing change: existing clients keep working.' : 'May change behaviour for existing clients.')

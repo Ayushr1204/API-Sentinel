@@ -15,9 +15,15 @@ def test_valid_31_json():
     assert r.valid, r.errors
 
 
-def test_swagger2_rejected():
+def test_swagger2_accepted_and_labelled():
     r = load_spec(json.dumps({"swagger": "2.0", "info": {"title": "x", "version": "1"}, "paths": {}}))
-    assert not r.valid and "Swagger" in r.errors[0].message
+    assert r.valid and r.spec_format == "Swagger 2.0" and r.openapi_version == "2.0"
+    assert r.doc["openapi"] == "3.1.0" and r.doc["x-sentinel-source"]["format"] == "swagger"
+
+
+def test_other_swagger_versions_rejected():
+    r = load_spec(json.dumps({"swagger": "1.2", "info": {"title": "x", "version": "1"}, "paths": {}}))
+    assert not r.valid and "Swagger version '1.2'" in r.errors[0].message
 
 
 def test_asyncapi_rejected():
@@ -25,9 +31,14 @@ def test_asyncapi_rejected():
     assert not r.valid and "AsyncAPI" in r.errors[0].message
 
 
-def test_unsupported_version():
+def test_openapi_32_accepted():
     r = load_spec(json.dumps(make_spec("3.2.0")))
-    assert not r.valid and "3.0.x or 3.1.x" in r.errors[0].message
+    assert r.valid and r.spec_format == "OpenAPI 3.2.0"
+
+
+def test_unsupported_version():
+    r = load_spec(json.dumps(make_spec("4.0.0")))
+    assert not r.valid and "Swagger 2.0 or OpenAPI 3.0.x, 3.1.x, 3.2.x" in r.errors[0].message
 
 
 def test_remote_ref_rejected_without_fetching():

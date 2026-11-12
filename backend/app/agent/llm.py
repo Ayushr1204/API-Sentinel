@@ -84,7 +84,7 @@ class OllamaClient:
     for JSON, and `think`. No key, no token, and no model download: the model must be pulled by the user."""
     provider = "ollama"
     label = "Ollama"
-    default_model = "qwen3.5:4b"
+    default_model = "qwen3.5:9b"
     supports_tools = True
 
     def __init__(self, model: str | None = None, transport: Any = None):
@@ -95,7 +95,7 @@ class OllamaClient:
         self.model = model or os.environ.get("OLLAMA_MODEL") or os.environ.get("SENTINEL_LLM_MODEL") or self.default_model
         self.name = f"ollama:{self.model}"
         self.base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-        self.timeout = _env_float("OLLAMA_TIMEOUT", 180.0)
+        self.timeout = _env_float("OLLAMA_TIMEOUT", 300.0)
         self.num_ctx = _env_int("OLLAMA_NUM_CTX", 8192)
         self.temperature = _env_float("SENTINEL_LLM_TEMPERATURE", 0.0)
         think = os.environ.get("OLLAMA_THINK", "false").strip().lower()

@@ -1,0 +1,1 @@
+Rolling Bookings API 2.0 (OpenAPI 3.2) back to the 1.0 Swagger 2.0 contract. Every change is reversed, and severity follows the direction: removing the currency field and the cancel endpoint now breaks clients that adopted 2.0. Expected: BLOCK.

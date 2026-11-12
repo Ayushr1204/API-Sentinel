@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: Payments API
+  version: 2.0.0
+  description: Card payments for the StayFlow checkout (sample).
+servers:
+- url: https://pay.stayflow.example/v1
+security:
+- auth: []
+paths:
+  /payments:
+    post:
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '402':
+          description: Card declined
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 64
+  /payments/{paymentId}:
+    get:
+      operationId: getPayment
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+components:
+  securitySchemes:
+    auth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    PaymentRequest:
+      type: object
+      required:
+      - amountCents
+      - currency
+      properties:
+        amountCents:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          enum:
+          - USD
+          - EUR
+          - INR
+          - GBP
+        reference:
+          type: string
+          maxLength: 64
+    Payment:
+      type: object
+      required:
+      - id
+      - status
+      - amountCents
+      - currency
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+          - authorized
+          - captured
+          - failed
+          - refunded
+        amountCents:
+          type: integer
+        currency:
+          type: string
+          enum:
+          - USD
+          - EUR
+          - INR
+          - GBP

@@ -1,0 +1,29 @@
+{
+  "decision": "HUMAN_REVIEW",
+  "rationale": "The QUERY operation is additive, but floor may now be null in responses; readers that do arithmetic on floor could fail, so a person should check consumers.",
+  "changes": [
+    {
+      "rule": "OPERATION_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "QUERY /rooms",
+      "field": null,
+      "why": "New HTTP QUERY search operation (OpenAPI 3.2)."
+    },
+    {
+      "rule": "NULLABLE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /rooms",
+      "field": "floor",
+      "direction": "response",
+      "why": "floor may be null."
+    },
+    {
+      "rule": "NULLABLE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /rooms/{roomId}",
+      "field": "floor",
+      "direction": "response",
+      "why": "floor may be null."
+    }
+  ]
+}

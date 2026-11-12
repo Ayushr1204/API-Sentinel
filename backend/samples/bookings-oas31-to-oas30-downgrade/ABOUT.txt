@@ -1,0 +1,1 @@
+Bookings API 1.0 (OpenAPI 3.1) -> 2.0 published as OpenAPI 3.0 for older tooling: a format downgrade (type arrays become nullable, numeric exclusiveMinimum becomes boolean) plus the 2.0 changes. Expected: BLOCK.

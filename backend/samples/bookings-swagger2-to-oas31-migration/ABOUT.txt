@@ -1,0 +1,1 @@
+Bookings API 1.0 migrated from Swagger 2.0 to OpenAPI 3.1 with no contract change (x-nullable becomes a type array, basePath becomes servers, body parameters become requestBody). Expected: PROCEED.

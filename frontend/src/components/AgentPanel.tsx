@@ -4,7 +4,11 @@ import { FINDING_LABEL, MODE_LABEL, OUTCOME_LABEL, ruleLabel } from '../labels'
 import type { AgentRecord, Analysis, Investigation, ServerConfig, TraceEvent } from '../types'
 import { DecisionWord, ErrorState, Icon, Spinner, StatusBadge } from '../ui'
 
-const ExecutionGraph = lazy(() => import('./graph/ExecutionGraph').then(m => ({ default: m.ExecutionGraph })))
+// React Flow is only loaded when the investigation graph is shown
+const ExecutionGraph = lazy(() => import('./graph/ExecutionGraph').then((m) => ({ default: m.ExecutionGraph })))
+const RunsTable = lazy(() => import('./graph/ExecutionGraph').then((m) => ({ default: m.RunsTable })))
+
+type TraceView = 'graph' | 'runs' | 'list'
 
 const NODES = ['baseline', 'plan', 'retrieve', 'assess', 'refine', 'execute', 'verify', 'reflect', 'decide'] as const
 const NODE_HELP: Record<string, string> = {
@@ -248,8 +252,13 @@ const TRACE_FILTERS = {
   control: { label: 'Planning & control', fn: (e: TraceEvent) => ['plan', 'reflect', 'decide', 'baseline'].includes(e.node) },
 } as const
 
-export function Trace({ trace, onPick }: { trace: TraceEvent[]; onPick: (id: string) => void }) {
-  const [open, setOpen] = useState<number | null>(null)
+export function Trace({ trace, onPick, focus }: { trace: TraceEvent[]; onPick: (id: string) => void; focus?: number | null }) {
+  const [open, setOpen] = useState<number | null>(focus ?? null)
+  useEffect(() => {
+    if (focus == null) return
+    setOpen(focus)
+    requestAnimationFrame(() => document.getElementById(`trace-ev-${focus}`)?.scrollIntoView({ block: 'center' }))
+  }, [focus])
   const [f, setF] = useState<keyof typeof TRACE_FILTERS>('all')
   const [cid, setCid] = useState('')
   const ids = [...new Set(trace.map((e) => e.change_id).filter(Boolean))] as string[]
@@ -299,8 +308,10 @@ export function InvestigationPanel({ a, onChange, onPick }: { a: Analysis; onCha
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [last, setLast] = useState<{ files: File[]; target: string; useSample: boolean } | null>(null)
-  const [showTrace, setShowTrace] = useState(false)
-  const [traceView, setTraceView] = useState<'graph' | 'list'>('graph')
+  const [showTrace, setShowTrace] = useState(true)
+  const [traceView, setTraceView] = useState<TraceView>('graph')
+  const [focusSeq, setFocusSeq] = useState<number | null>(null)
+  const showInList = (seq: number) => { setTraceView('list'); setShowTrace(true); setFocusSeq(seq) }
   const alive = useRef(true)
   useEffect(() => () => { alive.current = false }, [])
 
@@ -315,7 +326,7 @@ export function InvestigationPanel({ a, onChange, onPick }: { a: Analysis; onCha
         since = j.event_count
         if (j.events.length) setEvents((ev) => [...ev, ...j.events])
         setElapsed(j.elapsed_ms)
-        if (j.status === 'done') { onChange(await api.get(a.id)); setMode('view'); setShowTrace(false); return }
+        if (j.status === 'done') { onChange(await api.get(a.id)); setMode('view'); return }
         if (j.status === 'failed') throw new Error(j.error ?? 'Investigation failed')
         await new Promise((r) => setTimeout(r, 350))
       }
@@ -327,8 +338,9 @@ export function InvestigationPanel({ a, onChange, onPick }: { a: Analysis; onCha
   return (
     <div className="invest">
       <p className="muted invest__intro">
-        Investigate changes the contract tests could not settle. The agent retrieves consumer evidence, assesses impact,
-        runs refined tests, and verifies its findings — retrying or re-planning as needed. Every step below really ran.
+        The agent takes each change the contract tests could not settle and investigates it. It retrieves evidence from
+        consumer code and the specs, assesses the impact, generates and runs refined tests, and verifies its own
+        findings. Then it decides whether to retry, move on, re-plan or stop. Every step below really ran.
       </p>
       {error && <ErrorState title="Investigation failed" message={error} onRetry={last ? () => start(last.files, last.target, last.useSample) : undefined} />}
       {mode === 'form' && <InvestigationForm a={a} onStart={start} />}
@@ -344,27 +356,25 @@ export function InvestigationPanel({ a, onChange, onPick }: { a: Analysis; onCha
           <h3 className="section__h">Per-change investigation</h3>
           {inv.records.length ? <ChangeRows a={a} inv={inv} /> : <p className="muted">Nothing needed investigation: every change was settled by the contract tests.</p>}
           <div className="tracehead">
-            <h3 className="section__h">Execution trace</h3>
-            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-              <div className="gtoggle">
-                <button type="button" className={`gtoggle__btn${traceView === 'graph' ? ' gtoggle__btn--on' : ''}`}
-                  onClick={() => { setTraceView('graph'); setShowTrace(true) }}>Graph</button>
-                <button type="button" className={`gtoggle__btn${traceView === 'list' ? ' gtoggle__btn--on' : ''}`}
-                  onClick={() => { setTraceView('list'); setShowTrace(true) }}>List</button>
+            <h3 className="section__h">Execution graph and trace</h3>
+            <div className="tracehead__tools">
+              <div className="gtoggle" role="group" aria-label="How to show the run">
+                {([['graph', 'LangGraph'], ['runs', 'Per change'], ['list', 'Step list']] as [TraceView, string][]).map(([v, label]) => (
+                  <button key={v} type="button" aria-pressed={traceView === v} className={`gtoggle__btn${traceView === v ? ' gtoggle__btn--on' : ''}`}
+                    onClick={() => { setTraceView(v); setShowTrace(true); setFocusSeq(null) }}>{label}</button>
+                ))}
               </div>
               <button type="button" className="btn btn--quiet" onClick={() => setShowTrace(!showTrace)} aria-expanded={showTrace}>
                 {showTrace ? 'Hide' : `Show ${inv.trace.length} steps`}
               </button>
             </div>
           </div>
-          <ol className="pipeline pipeline--static" aria-label="Graph nodes">{NODES.map((n) => <li key={n} className="pipeline__n is-done" title={NODE_HELP[n]}>{n}</li>)}</ol>
-          {showTrace && traceView === 'list' && <Trace trace={inv.trace} onPick={onPick} />}
-          {showTrace && traceView === 'graph' && (
+          {showTrace && traceView === 'list' && <Trace trace={inv.trace} onPick={onPick} focus={focusSeq} />}
+          {showTrace && traceView !== 'list' && (
             <Suspense fallback={<div className="state state--loading"><Spinner /> Loading graph…</div>}>
-              <ExecutionGraph
-                trace={inv.trace}
-                onShowInTrace={(seq) => { setTraceView('list'); setShowTrace(true); setTimeout(() => document.getElementById(`trace-ev-${seq}`)?.scrollIntoView({ block: 'nearest' }), 100) }}
-              />
+              {traceView === 'graph'
+                ? <ExecutionGraph trace={inv.trace} onShowInTrace={showInList} onPick={onPick} />
+                : <RunsTable trace={inv.trace} records={inv.records} onShowInTrace={showInList} onPick={onPick} />}
             </Suspense>
           )}
         </>

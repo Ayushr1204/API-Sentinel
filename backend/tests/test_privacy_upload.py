@@ -59,17 +59,25 @@ def test_too_many_context_files_rejected(client):
 
 # ──────────────────────────── format validation ──────────────────────────────
 
-def test_swagger_2_rejected_server_side(client):
-    """Swagger 2.0 is explicitly rejected with a useful error."""
+def test_unsupported_swagger_version_rejected_server_side(client):
+    """Swagger 1.x is out of scope and rejected with a useful error naming the supported formats."""
+    swagger1 = b"swagger: '1.2'\ninfo:\n  title: Old\n  version: '1'\npaths: {}"
+    r = client.post("/api/analyses", files={
+        "base_spec": ("old.yaml", swagger1),
+        "candidate_spec": ("old.yaml", swagger1)})
+    assert r.status_code == 422
+    text = json.dumps(r.json()).lower()
+    assert "swagger 2.0 or openapi 3.0.x, 3.1.x, 3.2.x" in text
+
+
+def test_swagger_2_accepted_server_side(client):
+    """Swagger 2.0 is supported (converted internally); identical documents give no changes."""
     swagger2 = b"swagger: '2.0'\ninfo:\n  title: Old\n  version: '1'\npaths: {}"
     r = client.post("/api/analyses", files={
         "base_spec": ("old.yaml", swagger2),
         "candidate_spec": ("old.yaml", swagger2)})
-    assert r.status_code == 422
-    body = r.json()
-    # The error detail should mention Swagger 2.0
-    text = json.dumps(body).lower()
-    assert "swagger" in text or "2.0" in text or "openapi" in text
+    assert r.status_code == 200
+    assert r.json()["base"]["spec_format"] == "Swagger 2.0" and r.json()["changes"] == []
 
 
 def test_plain_text_rejected(client):
@@ -208,7 +216,7 @@ def test_server_validation_independent_of_browser(client):
 def test_validate_endpoint_rejects_invalid(client):
     """The /api/validate endpoint performs server-side checks on a single file."""
     r = client.post("/api/validate", files={
-        "spec": ("bad.yaml", b"swagger: '2.0'\ninfo:\n  title: X\n  version: '1'\npaths: {}")})
+        "spec": ("bad.yaml", b"swagger: '1.2'\ninfo:\n  title: X\n  version: '1'\npaths: {}")})
     assert r.status_code == 200  # endpoint returns 200 with valid=false
     body = r.json()
     assert body["valid"] is False

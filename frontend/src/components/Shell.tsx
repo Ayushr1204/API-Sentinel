@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { api } from '../api'
 import type { ChainStatus, LlmCheck, LlmMode, LlmStatus, SelfTest, ServerConfig } from '../types'
-import { Icon, Spinner } from '../ui'
+import { Icon, LogoMark, Spinner } from '../ui'
 
 export type Page = 'compare' | 'analysis' | 'history' | 'audit' | 'evaluation'
 
@@ -121,46 +121,43 @@ function SystemStatus({ page }: { page: Page }) {
         <Dot tone={!cfg ? 'muted' : cfg.reasoning ? (lastOk === null ? 'warn' : lastOk ? 'ok' : 'bad') : 'muted'} />
         <span>
           {!cfg ? 'Reasoning …' : cfg.reasoning
-            ? <>LLM <code>{llm?.model ?? cfg.reasoning}</code>{lastOk === null ? ' · not tested' : lastOk ? ' · working' : ' · failing'}</>
-            : llm?.configuration_problem ? <span className="error">{llm.configuration_problem}</span> : 'Rules only'}
+            ? <>LLM <code>{llm?.model ?? cfg.reasoning}</code> via Ollama (local){lastOk === null ? ' · not tested' : lastOk ? ' · working' : ' · failing'}</>
+            : llm?.configuration_problem ? <span className="error">{llm.configuration_problem}</span> : 'Rules only (no LLM configured)'}
         </span>
       </p>
+      {cfg?.reasoning && (
+        <div className="sysstatus__llm">
+          <button type="button" className="btn btn--tiny" onClick={testLlm} disabled={checking}>
+            {checking ? <><Spinner size={12} /> Testing…</> : 'Test connection'}
+          </button>
+          <button type="button" className="btn btn--tiny" onClick={runSelfTest} disabled={testing}
+            title="Tests A-C: basic inference, structured assessment, tool calling (a few real requests)">
+            {testing ? <><Spinner size={12} /> Self-test…</> : 'Run self-test'}
+          </button>
+          {selftest && (
+            <div className="tiny selftest" role="status">
+              {selftest.message && <p className="error">{selftest.message}</p>}
+              {selftest.steps.map((st) => (
+                <p key={st.id} className={st.ok ? 'ok' : st.skipped ? '' : 'error'}>
+                  {st.ok ? '✓' : st.skipped ? '–' : '✗'} {st.id} {st.name}: {st.detail}
+                </p>
+              ))}
+              {selftest.steps.length > 0 && <p>{selftest.live ? 'Real requests (not a test transport)' : 'NOT live: test transport'} to {selftest.model}</p>}
+            </div>
+          )}
+          {status && <LlmDiagnostics st={status} />}
+          {check && (
+            <p className={`tiny ${check.ok ? 'ok' : 'error'}`} role="status">
+              {check.ok ? `Real reply from ${check.resolved_model ?? check.model} in ${check.latency_ms} ms.` : `${check.category}: ${check.message}`}
+              {check.ok && check.model_note && <><br />{check.model_note}</>}
+            </p>
+          )}
+        </div>
+      )}
       <p className="sysstatus__row">
         <Dot tone={!chain ? 'muted' : chain.valid ? 'ok' : 'bad'} />
-        <span>{!chain ? 'Audit …' : chain.valid ? `Audit intact (${chain.events})` : `Chain broken #${chain.broken_at}`}</span>
+        <span>{!chain ? 'Audit chain …' : chain.valid ? `Audit chain intact (${chain.events})` : `Audit chain broken at #${chain.broken_at}`}</span>
       </p>
-      {cfg?.reasoning && (
-        <details className="sysstatus__details">
-          <summary>LLM diagnostics</summary>
-          <div className="sysstatus__llm">
-            <button type="button" className="btn btn--tiny" onClick={testLlm} disabled={checking}>
-              {checking ? <><Spinner size={11} /> Testing…</> : 'Test connection'}
-            </button>
-            <button type="button" className="btn btn--tiny" onClick={runSelfTest} disabled={testing}
-              title="Tests A-C: basic inference, structured assessment, tool calling (a few real requests)">
-              {testing ? <><Spinner size={11} /> Self-test…</> : 'Run self-test'}
-            </button>
-            {selftest && (
-              <div className="tiny selftest" role="status">
-                {selftest.message && <p className="error">{selftest.message}</p>}
-                {selftest.steps.map((st) => (
-                  <p key={st.id} className={st.ok ? 'ok' : st.skipped ? '' : 'error'}>
-                    {st.ok ? '✓' : st.skipped ? '–' : '✗'} {st.id} {st.name}: {st.detail}
-                  </p>
-                ))}
-                {selftest.steps.length > 0 && <p>{selftest.live ? 'Real requests (not a test transport)' : 'NOT live: test transport'} to {selftest.model}</p>}
-              </div>
-            )}
-            {status && <LlmDiagnostics st={status} />}
-            {check && (
-              <p className={`tiny ${check.ok ? 'ok' : 'error'}`} role="status">
-                {check.ok ? `Reply from ${check.resolved_model ?? check.model} in ${check.latency_ms} ms.` : `${check.category}: ${check.message}`}
-                {check.ok && check.model_note && <><br />{check.model_note}</>}
-              </p>
-            )}
-          </div>
-        </details>
-      )}
     </section>
   )
 }
@@ -170,10 +167,10 @@ export function Shell({ page, analysisId, children }: { page: Page; analysisId: 
     <div className="shell">
       <aside className="sidebar">
         <a href="#" className="brand">
-          <span className="brand__mark" aria-hidden="true"><Icon name="check" size={14} /></span>
+          <span className="brand__mark" aria-hidden="true"><LogoMark size={22} /></span>
           <span>
             <span className="brand__name">API Sentinel</span>
-            <span className="brand__sub">Release gate for OpenAPI 3.0/3.1</span>
+            <span className="brand__sub">Release gate for Swagger 2.0 and OpenAPI 3.x</span>
           </span>
         </a>
         <nav className="nav" aria-label="Main">

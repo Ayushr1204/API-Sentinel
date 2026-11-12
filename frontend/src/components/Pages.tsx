@@ -157,6 +157,7 @@ export function EvaluationView() {
   const { data, error, busy, run } = useLoad<EvaluationReport>(load)
   const m = data?.detection.metrics
   const am = data?.agent.metrics
+  const sm = data?.samples?.metrics
   return (
     <main className="page">
       <PageHeader title="Evaluation"
@@ -172,6 +173,7 @@ export function EvaluationView() {
             <ul className="small">
               <li><strong>Change detection:</strong> {m.cases} spec edits, each designed to mean one thing for existing clients (including traps such as a <code>readOnly</code> required field). Labels are the expected rule, severity and release decision, written from the design of each edit, not from engine output.</li>
               <li><strong>Investigation:</strong> {am.cases} cases with real, decoy, noisy or no consumer code. Affected changes were labelled by reading the consumer code.</li>
+              {sm && <li><strong>Bundled samples:</strong> {sm.samples} sample pairs, each with a hand-written <code>expected.json</code> (expected changes and severities, the expected decision, and the expected decision after investigation where consumer code exists). They cover Swagger 2.0 and OpenAPI 3.0, 3.1 and 3.2, including upgrades and downgrades.</li>}
               <li><strong>Baselines:</strong> simpler gates over the same detected changes, keyword retrieval without verification, and the agent with retries disabled.</li>
             </ul>
           </section>
@@ -184,6 +186,36 @@ export function EvaluationView() {
             <Stat value={String(am.false_escalations)} label="false escalations" />
           </div>
           <p className="muted small">{m.cases_fully_correct}/{m.cases} detection cases fully correct ({m.true_positives} TP, {m.false_positives} FP, {m.false_negatives} FN). Ran in {data.duration_ms} ms.</p>
+
+          {data.samples && sm && (
+            <>
+              <h2 className="section__h">Bundled samples vs ground truth</h2>
+              <p className="muted small">
+                {sm.passed}/{sm.samples} samples fully match their label · {sm.matched}/{sm.expected_changes} labelled changes
+                found ({pct(sm.recall)} recall), {sm.unexpected} unexpected ({pct(sm.precision)} precision) · severity correct
+                on {sm.severity_correct}/{sm.matched} · decisions after investigation {sm.investigations_correct}/{sm.investigations_checked}.
+              </p>
+              <div className="tablewrap">
+                <table className="table">
+                  <thead><tr><th>Sample</th><th>Formats</th><th>Expected</th><th>Got</th><th>After investigation</th><th>Changes</th><th>Result</th></tr></thead>
+                  <tbody>{data.samples.cases.map((c) => (
+                    <tr key={c.sample}>
+                      <td><code>{c.sample}</code>{c.problems.map((x) => <div key={x} className="tiny error">{x}</div>)}</td>
+                      <td className="small">{c.base_format} → {c.candidate_format}</td>
+                      <td><DecisionWord d={c.expected_decision} /></td>
+                      <td><DecisionWord d={c.decision} />{!c.decision_match && <span className="error"> ✗</span>}</td>
+                      <td>{c.investigation
+                        ? <><DecisionWord d={c.investigation.actual_decision} /> <span className="muted tiny">(exp. {c.investigation.expected_decision.replace('_', ' ').toLowerCase()})</span>
+                          {!c.investigation.decision_match && <span className="error"> ✗</span>}</>
+                        : <span className="muted small">not labelled</span>}</td>
+                      <td className="nowrap small">{c.counts.matched + c.counts.severity_mismatch}/{c.counts.expected} found{c.counts.unexpected ? `, ${c.counts.unexpected} extra` : ''}</td>
+                      <td><span className={`tag ${c.pass ? 'tag--ok' : 'tag--bad'}`}>{c.pass ? 'Pass' : 'Fail'}</span></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </>
+          )}
 
           {data.detection.baselines && (
             <>

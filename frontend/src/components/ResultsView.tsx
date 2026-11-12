@@ -3,9 +3,10 @@ import { CATEGORY_ORDER, DECISION_COPY, SEVERITY_LABEL, VERDICT_LABEL, categoryO
 import type { AgentRecord, Analysis, Change, Severity, TestCase, TestResult } from '../types'
 import { DecisionWord, Empty, Icon, PageHeader, Stat, StatusBadge, Tabs } from '../ui'
 import { AgentEvidence, InvestigationPanel, OutcomeTag } from './AgentPanel'
+import { GroundTruthBadge, GroundTruthPanel } from './GroundTruth'
 import { AuditTrail, ReviewPanel } from './ReviewPanel'
 
-export type ResultTab = 'changes' | 'investigation' | 'decision' | 'audit'
+export type ResultTab = 'changes' | 'investigation' | 'decision' | 'truth' | 'audit'
 type GroupBy = 'operation' | 'category' | 'severity'
 
 const FILTERS: { key: 'ALL' | Severity; label: string }[] = [
@@ -23,6 +24,8 @@ function Json({ value }: { value: unknown }) {
   if (value === undefined || value === null) return <span className="muted small">(not present)</span>
   return <pre className="json">{JSON.stringify(value, null, 2)}</pre>
 }
+
+const specFormat = (s: Analysis['base']) => s.spec_format ?? `OpenAPI ${s.openapi_version}`
 
 const operationOf = (c: Change) => (c.method && c.path ? `${c.method.toUpperCase()} ${c.path}` : 'Whole document')
 const detailOf = (c: Change) => {
@@ -264,26 +267,23 @@ function Verdict({ a, onPick }: { a: Analysis; onPick: (id: string) => void }) {
       </div>
       <div className="verdict__body">
         <p className="verdict__line">{copy.line}</p>
-        {reasons.length > 0 && (
-          <ul className="reasons">
-            {reasons.slice(0, 5).map((r, i) => (
-              <li key={`${r.code}-${i}`}>
-                {r.text}
-                {r.ids.length > 0 && (
-                  <span className="reasons__ids">
-                    {r.ids.slice(0, 8).map((id) => <button key={id} type="button" className="chip" onClick={() => onPick(id)}>{id}</button>)}
-                    {r.ids.length > 8 && <span className="muted small">+{r.ids.length - 8}</span>}
-                  </span>
-                )}
-              </li>
-            ))}
-            {reasons.length > 5 && <li className="muted small">and {reasons.length - 5} more</li>}
-          </ul>
-        )}
-        <p className="verdict__human small muted">
+        <ul className="reasons">
+          {reasons.map((r, i) => (
+            <li key={`${r.code}-${i}`}>
+              {r.text}
+              {r.ids.length > 0 && (
+                <span className="reasons__ids">
+                  {r.ids.slice(0, 12).map((id) => <button key={id} type="button" className="chip" onClick={() => onPick(id)}>{id}</button>)}
+                  {r.ids.length > 12 && <span className="muted small">+{r.ids.length - 12}</span>}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="verdict__human small">
           {review
             ? <><strong>Release {review.decision === 'APPROVED' ? 'approved' : 'rejected'}</strong> by {review.reviewer}{review.overrides_recommendation ? ' (override)' : ''}.</>
-            : <>A person approves or rejects the release in <strong>Release decision</strong>.</>}
+            : <>This is advice. A person approves or rejects the release in <strong>Release decision</strong>.</>}
         </p>
       </div>
     </section>
@@ -310,7 +310,8 @@ export function ResultsView({ a, tab, onTab, onChange }: {
       <PageHeader
         eyebrow={<>Analysis <code>{a.id}</code> · {new Date(a.created_at).toLocaleString()}</>}
         title={<>{a.base.title ?? 'Untitled API'} <span className="muted">{a.base.api_version} → {a.candidate.api_version}</span></>}
-        subtitle={<>Baseline <code>{a.base.filename}</code> (OpenAPI {a.base.openapi_version}) compared with candidate <code>{a.candidate.filename}</code> (OpenAPI {a.candidate.openapi_version}).</>}
+        subtitle={<>Baseline <code>{a.base.filename}</code> ({specFormat(a.base)}) compared with candidate <code>{a.candidate.filename}</code> ({specFormat(a.candidate)}).
+          {a.ground_truth && <> <GroundTruthBadge gt={a.ground_truth} /></>}</>}
         actions={<a className="btn btn--quiet" href="#"><Icon name="compare" size={16} /> New comparison</a>} />
 
       <Verdict a={a} onPick={pick} />
@@ -330,12 +331,15 @@ export function ResultsView({ a, tab, onTab, onChange }: {
         { id: 'changes', label: 'Changes', badge: a.changes.length },
         { id: 'investigation', label: 'Investigation', badge: inv ? DECISION_COPY[inv.decision.decision].word : undefined },
         { id: 'decision', label: 'Release decision', badge: a.reviews[0] ? (a.reviews[0].decision === 'APPROVED' ? 'Approved' : 'Rejected') : undefined },
+        ...(a.ground_truth ? [{ id: 'truth' as const, label: 'Ground truth',
+          badge: `${a.ground_truth.counts.matched + a.ground_truth.counts.severity_mismatch}/${a.ground_truth.counts.expected}` }] : []),
         { id: 'audit', label: 'Audit trail' },
       ]} />
       <div className="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {tab === 'changes' && <ChangesTab a={a} records={records} selected={selected} setSelected={setSelected} />}
         {tab === 'investigation' && <InvestigationPanel a={a} onChange={onChange} onPick={pick} />}
         {tab === 'decision' && <ReviewPanel a={a} onChange={onChange} onPick={pick} />}
+        {tab === 'truth' && <GroundTruthPanel a={a} onPick={pick} />}
         {tab === 'audit' && <AuditTrail analysisId={a.id} refreshKey={`${inv?.id ?? ''}-${a.reviews.length}`} />}
       </div>
     </main>

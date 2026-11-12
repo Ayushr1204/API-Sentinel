@@ -1,0 +1,55 @@
+{
+  "decision": "PROCEED",
+  "rationale": "Every change is additive or loosens a request constraint; no existing client can break.",
+  "changes": [
+    {
+      "rule": "CONSTRAINT_LOOSENED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets",
+      "field": "limit",
+      "why": "A larger maximum still accepts every old value."
+    },
+    {
+      "rule": "OPTIONAL_PARAM_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets",
+      "field": "sort",
+      "why": "Optional parameter; old clients omit it."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets",
+      "field": "createdAt",
+      "why": "New response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /pets",
+      "field": "notes",
+      "why": "New optional request field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /pets",
+      "field": "createdAt",
+      "why": "New response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets/{petId}",
+      "field": "createdAt",
+      "why": "New response field."
+    },
+    {
+      "rule": "PATH_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets/{petId}/photos",
+      "field": null,
+      "why": "New endpoint."
+    }
+  ]
+}

@@ -8,7 +8,7 @@ import type { Analysis } from './types'
 import { ErrorState, Loading } from './ui'
 
 type Route = { page: Page; id?: string; tab?: ResultTab }
-const TABS: ResultTab[] = ['changes', 'investigation', 'decision', 'audit']
+const TABS: ResultTab[] = ['changes', 'investigation', 'decision', 'truth', 'audit']
 
 function parse(): Route {
   const h = window.location.hash

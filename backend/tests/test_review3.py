@@ -121,8 +121,8 @@ def test_audit_chain_records_lifecycle_and_detects_tampering(tmp_path, client):
 
 
 def test_invalid_upload_is_audited(client):
-    r = client.post("/api/analyses", files={"base_spec": ("a.yaml", b"swagger: '2.0'"),
-                                            "candidate_spec": ("b.yaml", b"swagger: '2.0'")})
+    r = client.post("/api/analyses", files={"base_spec": ("a.yaml", b"swagger: '1.2'"),
+                                            "candidate_spec": ("b.yaml", b"swagger: '1.2'")})
     assert r.status_code == 422
     ev = client.get("/api/audit").json()["events"][0]
     assert ev["action"] == "analysis.rejected" and ev["details"]["base_errors"] == 1

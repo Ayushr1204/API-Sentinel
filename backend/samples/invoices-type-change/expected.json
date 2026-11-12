@@ -1,0 +1,69 @@
+{
+  "decision": "BLOCK",
+  "rationale": "A new required filter and three number-to-string type changes break every existing client; the PDF endpoint is gone.",
+  "changes": [
+    {
+      "rule": "REQUIRED_PARAM_ADDED",
+      "severity": "BREAKING",
+      "operation": "GET /invoices",
+      "field": "customerId",
+      "why": "Old clients never send customerId, so the call now fails validation."
+    },
+    {
+      "rule": "TYPE_CHANGED",
+      "severity": "BREAKING",
+      "operation": "GET /invoices",
+      "field": "amount",
+      "why": "amount is now a decimal string; clients parsing a number fail."
+    },
+    {
+      "rule": "TYPE_CHANGED",
+      "severity": "BREAKING",
+      "operation": "POST /invoices",
+      "field": "quantity",
+      "why": "quantity must now be sent as a string; old clients send a number."
+    },
+    {
+      "rule": "TYPE_CHANGED",
+      "severity": "BREAKING",
+      "operation": "POST /invoices",
+      "field": "amount",
+      "why": "Created invoice returns amount as a string."
+    },
+    {
+      "rule": "TYPE_CHANGED",
+      "severity": "BREAKING",
+      "operation": "GET /invoices/{invoiceId}",
+      "field": "amount",
+      "why": "Single invoice returns amount as a string."
+    },
+    {
+      "rule": "PATH_REMOVED",
+      "severity": "BREAKING",
+      "operation": "GET /invoices/{invoiceId}/pdf",
+      "field": null,
+      "why": "The PDF download endpoint no longer exists."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /invoices",
+      "field": "dueDate",
+      "why": "New optional response field; old clients ignore it."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /invoices",
+      "field": "dueDate",
+      "why": "New optional response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /invoices/{invoiceId}",
+      "field": "dueDate",
+      "why": "New optional response field."
+    }
+  ]
+}

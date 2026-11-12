@@ -1,0 +1,1 @@
+Bookings API 1.0 (Swagger 2.0) -> 2.0 (OpenAPI 3.2): format upgrade plus a release with a new required propertyId filter, a shorter guest name limit, a new 'no_show' status, a currency field and a cancel endpoint. Expected: BLOCK.

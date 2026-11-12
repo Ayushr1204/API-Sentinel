@@ -5,7 +5,7 @@ import copy
 import re
 from typing import Any, Iterator
 
-HTTP_METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
+HTTP_METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace", "query")  # query: OAS 3.2
 _PARAM_RE = re.compile(r"\{[^}/]+\}")
 
 
@@ -96,7 +96,8 @@ def operations(doc: dict) -> Iterator[tuple[str, str, dict, list[dict]]]:
         if not isinstance(item, dict):
             continue
         path_params = [deref(doc, p)[0] for p in item.get("parameters", []) or []]
-        for method in HTTP_METHODS:
+        extra = tuple(m for m in item.get("x-sentinel-methods", []) or [] if isinstance(m, str))
+        for method in (*HTTP_METHODS, *extra):  # extra: OAS 3.2 additionalOperations, folded in by convert.py
             op = item.get(method)
             if not isinstance(op, dict):
                 continue
@@ -108,7 +109,10 @@ def operations(doc: dict) -> Iterator[tuple[str, str, dict, list[dict]]]:
 
 
 def schema_types(schema: dict, oas31: bool) -> set[str] | None:
-    """Normalised set of JSON types, folding OAS 3.0 'nullable' into 'null'. None = unconstrained."""
+    """Normalised set of JSON types, folding 'nullable' into 'null'. None = unconstrained.
+
+    Documents are normalised to 3.1 semantics on load, but a 3.0 'nullable' with no 'type' is kept as is, so it is
+    honoured whatever `oas31` says."""
     t = schema.get("type")
     if t is None:
         types = None
@@ -116,10 +120,12 @@ def schema_types(schema: dict, oas31: bool) -> set[str] | None:
         types = set(t)
     else:
         types = {t}
-    if types is not None and not oas31 and schema.get("nullable") is True:
+    if types is not None and schema.get("nullable") is True:
         types.add("null")
     return types
 
 
 def is_oas31(doc: dict) -> bool:
-    return str(doc.get("openapi", "")).startswith("3.1")
+    """True for JSON Schema 2020-12 semantics: OpenAPI 3.1, 3.2, and every document after load (normalised)."""
+    version = str(doc.get("openapi", ""))
+    return version.startswith("3.1") or version.startswith("3.2")

@@ -418,11 +418,83 @@ def detection_baselines(rows: list[dict], analyses: dict[str, dict]) -> list[dic
     return out
 
 
+def run_samples() -> dict:
+    """Score every bundled sample against its hand-written expected.json (ground truth)."""
+    from . import groundtruth
+    from .convert import SOURCE_KEY
+    rows = []
+    for d in sorted(p for p in settings.samples_dir.iterdir() if p.is_dir()):
+        expected = groundtruth.load_expected(d)
+        if not expected:
+            continue
+        base = load_spec(next(d.glob("base.*")).read_bytes(), "base")
+        cand = load_spec(next(d.glob("candidate.*")).read_bytes(), "candidate")
+        a = run_analysis(base, cand)
+        gt = groundtruth.score(a, expected)
+        inv_gt = None
+        if expected.get("decision_after_investigation"):
+            files = [(p.name, p.read_text(encoding="utf-8")) for p in sorted((d / "context").iterdir())] \
+                if (d / "context").is_dir() else []
+            index = build_index(base.doc, cand.doc, files)
+            inv = run_investigation(base.doc, cand.doc, a, index, [n for n, _ in files], None, llm=None)
+            inv_gt = groundtruth.score_investigation(inv, expected)
+        label = lambda r: (r.doc.get(SOURCE_KEY) or {}).get("label", r.openapi_version)  # noqa: E731
+        rows.append({"sample": d.name, "base_format": label(base), "candidate_format": label(cand),
+                     "expected_decision": gt["expected_decision"], "decision": gt["actual_decision"],
+                     "decision_match": gt["decision_match"], "counts": gt["counts"],
+                     "precision": gt["precision"], "recall": gt["recall"],
+                     "investigation": inv_gt,
+                     "pass": gt["pass"] and (inv_gt is None or inv_gt["decision_match"]),
+                     "problems": [f"missed {r['expected']['rule']} at {r['expected'].get('operation', '')}"
+                                  for r in gt["changes"] if r["status"] == "missed"]
+                     + [f"{r['expected']['rule']}: graded {r['actual_severity']}, expected {r['expected']['severity']}"
+                        for r in gt["changes"] if r["status"] == "severity_mismatch"]
+                     + [f"unexpected {u['rule']} at {u['location']}" for u in gt["unexpected"]]})
+    tp = sum(r["counts"]["matched"] + r["counts"]["severity_mismatch"] for r in rows)
+    fn = sum(r["counts"]["missed"] for r in rows)
+    fp = sum(r["counts"]["unexpected"] for r in rows)
+    return {"cases": rows, "metrics": {
+        "samples": len(rows), "passed": sum(r["pass"] for r in rows),
+        "decisions_correct": sum(r["decision_match"] for r in rows),
+        "expected_changes": tp + fn, "matched": tp, "missed": fn, "unexpected": fp,
+        "severity_correct": sum(r["counts"]["matched"] for r in rows),
+        "precision": round(tp / (tp + fp), 4) if tp + fp else 1.0,
+        "recall": round(tp / (tp + fn), 4) if tp + fn else 1.0,
+        "investigations_checked": sum(r["investigation"] is not None for r in rows),
+        "investigations_correct": sum(bool(r["investigation"] and r["investigation"]["decision_match"])
+                                      for r in rows)}}
+
+
 def run_all() -> dict:
     t = time.perf_counter()
-    out = {"detection": run_detection(), "agent": run_agent()}
+    out = {"detection": run_detection(), "agent": run_agent(), "samples": run_samples()}
     out["duration_ms"] = round((time.perf_counter() - t) * 1000, 1)
     return out
+
+
+def _samples_markdown(samples: dict) -> list[str]:
+    sm = samples["metrics"]
+    lines = ["", "## Bundled samples against their ground truth", "",
+              "Each sample folder ships an `expected.json` written by hand (expected changes with severities, the",
+              "expected baseline decision and, for samples with consumer code, the expected decision after a",
+              "rules-mode investigation). The same score is shown on the analysis page in the UI.", "",
+              f"* Samples: **{sm['samples']}**, fully matching: **{sm['passed']}**; decisions correct "
+              f"**{sm['decisions_correct']}/{sm['samples']}**",
+              f"* Expected changes found: **{sm['matched']}/{sm['expected_changes']}** (recall {sm['recall']:.2%}); "
+              f"unexpected changes: **{sm['unexpected']}** (precision {sm['precision']:.2%}); "
+              f"severity correct: **{sm['severity_correct']}/{sm['matched']}**",
+              f"* Investigations checked: **{sm['investigations_correct']}/{sm['investigations_checked']}** correct", "",
+              "| Sample | Formats | Expected | Got | After investigation | Changes (matched/expected, unexpected) | Result | Notes |",
+              "|---|---|---|---|---|---|---|---|"]
+    for c in samples["cases"]:
+        inv = c["investigation"]
+        inv_s = "—" if not inv else f"{inv['actual_decision']} (exp. {inv['expected_decision']})"
+        k = c["counts"]
+        lines.append(f"| `{c['sample']}` | {c['base_format']} → {c['candidate_format']} | {c['expected_decision']} | "
+                     f"{c['decision']} | {inv_s} | {k['matched'] + k['severity_mismatch']}/{k['expected']}, "
+                     f"{k['unexpected']} | {'pass' if c['pass'] else '**FAIL**'} | "
+                     f"{'; '.join(c['problems']).replace('|', '/')} |")
+    return lines
 
 
 def to_markdown(r: dict) -> str:
@@ -456,6 +528,8 @@ def to_markdown(r: dict) -> str:
     for b in r["detection"]["baselines"]:
         lines.append(f"| {b['label']} | {b['correct']}/{b['cases']} | {b['decision_accuracy']:.0%} | "
                      f"{'; '.join(b['wrong']) or 'none'} |")
+    if "samples" in r:
+        lines += _samples_markdown(r["samples"])
     lines += ["", "## Agent investigation compared with simpler approaches", "",
               "Impact precision/recall are per change, over cases whose affected changes were labelled by reading "
               "the consumer code (`affected` in `AGENT_CASES`).", "",
@@ -506,6 +580,12 @@ def main() -> None:
     for c in r["agent"]["comparison"]:
         print(f"  agent-cmp {c['system']:<15} {c['correct']}/{c['cases']} decisions, {c['false_escalations']} false "
               f"escalations, impact P={c['impact_precision']} R={c['impact_recall']}")
+    sm = r["samples"]["metrics"]
+    print(f"samples: {sm['passed']}/{sm['samples']} match ground truth, {sm['matched']}/{sm['expected_changes']} changes,"
+          f" {sm['unexpected']} unexpected, investigations {sm['investigations_correct']}/{sm['investigations_checked']}")
+    for c in r["samples"]["cases"]:
+        if not c["pass"]:
+            print("FAIL", json.dumps(c, default=str)[:600])
     for c in r["detection"]["cases"] + r["agent"]["cases"]:
         if not c["pass"]:
             print("FAIL", json.dumps(c, default=str)[:600])

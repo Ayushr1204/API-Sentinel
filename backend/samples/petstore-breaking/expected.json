@@ -1,0 +1,161 @@
+{
+  "decision": "BLOCK",
+  "decision_after_investigation": "BLOCK",
+  "rationale": "Removed operation, new required header and body field, removed response field, tightened limits: many hard breaks confirmed by tests.",
+  "changes": [
+    {
+      "rule": "CONSTRAINT_TIGHTENED",
+      "severity": "BREAKING",
+      "operation": "GET /pets",
+      "field": "limit",
+      "why": "Lower maximum rejects values old clients send."
+    },
+    {
+      "rule": "ENUM_VALUE_REMOVED",
+      "severity": "BREAKING",
+      "operation": "GET /pets",
+      "field": "status",
+      "why": "A status value old clients filter by is no longer accepted."
+    },
+    {
+      "rule": "REQUIRED_PARAM_ADDED",
+      "severity": "BREAKING",
+      "operation": "GET /pets",
+      "field": "x-tenant-id",
+      "why": "Old clients never send the new required header."
+    },
+    {
+      "rule": "PROPERTY_BECAME_OPTIONAL",
+      "severity": "BREAKING",
+      "operation": "GET /pets",
+      "field": "name",
+      "why": "Clients relying on name being present can fail."
+    },
+    {
+      "rule": "RESPONSE_PROPERTY_REMOVED",
+      "severity": "BREAKING",
+      "operation": "GET /pets",
+      "field": "tag",
+      "why": "Clients reading tag lose it."
+    },
+    {
+      "rule": "CONSTRAINT_TIGHTENED",
+      "severity": "BREAKING",
+      "operation": "POST /pets",
+      "field": "name",
+      "why": "Shorter maxLength rejects names old clients send."
+    },
+    {
+      "rule": "REQUIRED_PROPERTY_ADDED",
+      "severity": "BREAKING",
+      "operation": "POST /pets",
+      "field": "species",
+      "why": "Old clients never send species."
+    },
+    {
+      "rule": "PROPERTY_BECAME_OPTIONAL",
+      "severity": "BREAKING",
+      "operation": "POST /pets",
+      "field": "name",
+      "why": "Response name may now be missing."
+    },
+    {
+      "rule": "RESPONSE_PROPERTY_REMOVED",
+      "severity": "BREAKING",
+      "operation": "POST /pets",
+      "field": "tag",
+      "why": "tag removed from the created pet."
+    },
+    {
+      "rule": "SECURITY_ADDED",
+      "severity": "BREAKING",
+      "operation": "POST /pets",
+      "field": null,
+      "why": "Creating a pet now needs credentials."
+    },
+    {
+      "rule": "OPERATION_REMOVED",
+      "severity": "BREAKING",
+      "operation": "DELETE /pets/{petId}",
+      "field": null,
+      "why": "Delete is gone."
+    },
+    {
+      "rule": "PROPERTY_BECAME_OPTIONAL",
+      "severity": "BREAKING",
+      "operation": "GET /pets/{petId}",
+      "field": "name",
+      "why": "Response name may now be missing."
+    },
+    {
+      "rule": "RESPONSE_PROPERTY_REMOVED",
+      "severity": "BREAKING",
+      "operation": "GET /pets/{petId}",
+      "field": "tag",
+      "why": "tag removed."
+    },
+    {
+      "rule": "RESPONSE_HEADER_REMOVED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /pets",
+      "field": null,
+      "why": "Clients reading the paging header lose it."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /pets",
+      "field": "status",
+      "why": "New status value in responses."
+    },
+    {
+      "rule": "REQUEST_PROPERTY_REMOVED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "POST /pets",
+      "field": "tag",
+      "why": "Old clients still send tag; it may be rejected or ignored."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "POST /pets",
+      "field": "status",
+      "why": "New status value in responses."
+    },
+    {
+      "rule": "ENUM_VALUE_ADDED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /pets/{petId}",
+      "field": "status",
+      "why": "New status value in responses."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets",
+      "field": "species",
+      "why": "New response field."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /pets",
+      "field": "species",
+      "why": "New response field."
+    },
+    {
+      "rule": "PATH_PARAM_RENAMED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets/{petId}",
+      "field": null,
+      "why": "Template variable renamed; same URLs on the wire."
+    },
+    {
+      "rule": "PROPERTY_ADDED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /pets/{petId}",
+      "field": "species",
+      "why": "New response field."
+    }
+  ]
+}

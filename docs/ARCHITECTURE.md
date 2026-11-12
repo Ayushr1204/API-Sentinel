@@ -1,6 +1,6 @@
 # API Sentinel — Architecture and Design (Review 2)
 
-API Sentinel is a release gate for REST APIs. It compares two OpenAPI 3.0/3.1 specifications: the **baseline**, which is
+API Sentinel is a release gate for REST APIs. It compares two API specifications (Swagger 2.0 or OpenAPI 3.0, 3.1 or 3.2, in any combination): the **baseline**, which is
 the contract clients use today, and the **candidate**, which is the contract about to be released. It detects every
 structural change and runs a targeted compatibility test for each one. It then investigates the uncertain changes
 against evidence from consumer code, and recommends **PROCEED**, **HUMAN_REVIEW** or **BLOCK**. A named person makes
@@ -15,25 +15,27 @@ This document describes the code as it is. Anything not implemented is listed un
 | ID | Requirement | Where it is implemented |
 |----|-------------|-------------------------|
 | F1 | Upload two specs (YAML/JSON) or pick a bundled sample | `UploadView.tsx`, `POST /api/analyses`, `/api/analyses/sample/{name}` |
-| F2 | Validate as OpenAPI 3.0.x/3.1.x with readable errors. Reject Swagger 2.0, AsyncAPI and external `$ref`s | `spec_loader.py` |
+| F2 | Validate Swagger 2.0 and OpenAPI 3.0.x/3.1.x/3.2.x, each with its own schema, with readable errors. Reject Swagger 1.x, AsyncAPI and external `$ref`s | `spec_loader.py` |
+| F2b | Compare any version with any version, in both directions: convert both documents to one internal model (OpenAPI 3.1 semantics) so format alone is never an API change | `convert.py` |
 | F3 | Deterministic structural diff (paths, operations, parameters, bodies, responses, schemas, security, servers) | `diff.py` |
 | F4 | Direction-aware classification (BREAKING / POTENTIALLY_BREAKING / NON_BREAKING) with stable rule IDs | `diff.py` |
 | F5 | Generate **and execute** a targeted test per change | `testgen.py`, `instances.py`, `runner.py` |
 | F6 | Recommendation traceable to changes and test results | `recommend.py` |
 | F7 | Agentic investigation: plan, retrieve, assess, refine tests, execute, verify, reflect, decide | `agent/graph.py` (LangGraph) |
 | F8 | Evidence retrieval over consumer code and specs | `evidence.py` (BM25) |
-| F9 | Observable execution: live progress plus a full trace with mode, inputs, outputs and timings | job API in `main.py`, `AgentPanel.tsx` |
+| F9 | Observable execution: live progress plus a full trace with mode, inputs, outputs and timings, shown as the LangGraph state graph with per-node and per-edge counts, a step replay, a per-change table and a step list | job API in `main.py`, `AgentPanel.tsx`, `graph/ExecutionGraph.tsx`, `graph/stateGraph.ts` |
 | F10 | Optional LLM reasoning with a local Ollama model, with model tool calling and graceful failure (rules-only fallback) | `agent/llm.py` |
 | F11 | Optional live HTTP replay against a running deployment, guarded against SSRF | `agent/tools.py::live_request`, `check_target` |
 | F12 | Human release decision with acknowledgement rules | `review.py`, `ReviewPanel.tsx` |
 | F13 | Durable, tamper-evident audit trail | `store.py` |
 | F14 | Labelled evaluation with baselines | `evaluation.py`, `docs/EVALUATION.md` |
+| F15 | Ground truth for every bundled sample (`expected.json`), scored on the analysis page and in Evaluation | `groundtruth.py`, `ResultsView.tsx`, `Pages.tsx` |
 
 **Non-functional:** runs on a Windows laptop with Python 3.10+ and Node 18+ and nothing else. Works with **no**
 network or LLM. The deterministic core is reproducible. Never fabricate results: every trace event is emitted by
 the node that ran.
 
-**Out of scope:** GraphQL, gRPC, Swagger 2.0, AsyncAPI, multi-user authentication, hosted deployment.
+**Out of scope:** GraphQL, gRPC, Swagger 1.x, AsyncAPI, multi-user authentication, hosted deployment.
 
 ---
 
@@ -162,7 +164,8 @@ at most `STEP_BUDGET = 28` retrieve calls, and the remaining changes are reporte
 
 | Tool (code) | Input | Output | Side effects |
 |-------------|-------|--------|--------------|
-| `spec_loader.load_spec` | bytes, filename | `LoadedSpec` (valid, version, errors with locations, stats) | none |
+| `spec_loader.load_spec` | bytes, filename | `LoadedSpec` (valid, original format and version, errors with locations, stats, internal OAS 3.1 document) | none |
+| `convert.to_internal` | validated Swagger 2.0 / OAS 3.x document | equivalent OAS 3.1 document tagged with `x-sentinel-source` | none |
 | `diff.diff_specs` | base doc, candidate doc | `Change[]` (rule, severity, direction, location, before/after) | none |
 | `testgen.generate_tests` | docs, changes | `TestCase[]` (kind, targeted payload, prediction) | none |
 | `runner.run_tests` | docs, tests | `TestResult[]` (status, observed, verdict, errors) | none |
@@ -260,7 +263,7 @@ erDiagram
 * Provider selection: Ollama is the only LLM runtime. `SENTINEL_LLM_PROVIDER=ollama` (alias `local`; `LLM_PROVIDER` is
   accepted as an alias of the variable) enables it; without it, or with `SENTINEL_LLM=off`, the agent runs in rules-only
   mode. Any other provider name is refused with a configuration message and rules-only mode. Ollama is never assumed to
-  be installed. `OLLAMA_MODEL` (default `qwen3.5:4b`) selects the model; `SENTINEL_LLM_MODEL` is a fallback name.
+  be installed. `OLLAMA_MODEL` (default `qwen3.5:9b`; `qwen3.5:4b` fits fully on a 6 GB GPU) selects the model; `SENTINEL_LLM_MODEL` is a fallback name.
 * **Ollama (local):** a small dedicated adapter on the native API rather than Ollama's OpenAI-compatible `/v1`
   endpoint, because only the native API sets the context size (`options.num_ctx`; Ollama defaults to 4096 tokens
   on GPUs under 24 GB, which would silently truncate evidence-heavy prompts), `format`, and `think`.
@@ -310,6 +313,9 @@ See [`EVALUATION.md`](EVALUATION.md), generated by `python -m app.evaluation`.
 * **Investigation:** 6 cases with real, noisy, decoy or no consumer code. Affected changes were labelled by reading the
   code. Metrics: decision accuracy, false escalations, and per-change impact precision and recall. **Baselines:** deterministic
   only, keyword RAG without verification, and the agent with retries disabled.
+* **Bundled samples (ground truth):** each of the 12 samples has a hand-written `expected.json` (expected changes with
+  severities, the expected decision, and the expected decision after a rules-mode investigation where consumer code
+  exists). Metrics: per-sample pass, change precision and recall, severity accuracy, decision accuracy.
 * The corpus is small and was written alongside the engine, so the numbers show regression coverage and the
   effect of each pattern, not general superiority. The LLM path is not in these numbers.
 
@@ -317,11 +323,11 @@ See [`EVALUATION.md`](EVALUATION.md), generated by `python -m app.evaluation`.
 
 ## 12. Implemented vs future work
 
-**Implemented and verified:** everything in sections 1–11. 154 automated backend tests, the self-checking `demo.py`, the
+**Implemented and verified:** everything in sections 1–11. 183 automated backend tests, the self-checking `demo.py`, the
 evaluation corpus, and a real-browser walkthrough.
 
 **Not done (future work):**
-* An evaluation of the LLM assessment path (for example the local `qwen3.5:4b`) on the same corpus. The Ollama adapter is
+* An evaluation of the LLM assessment path (for example the local `qwen3.5:9b`) on the same corpus. The Ollama adapter is
   covered by mocked tests only; real local inference has to be validated on a machine running Ollama.
 * Authentication and roles for reviewers, and signed audit-chain checkpoints.
 * Streaming with server-sent events instead of polling (polling every 350 ms is sufficient locally).

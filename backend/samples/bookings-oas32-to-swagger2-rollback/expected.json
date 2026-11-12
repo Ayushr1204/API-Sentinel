@@ -1,0 +1,92 @@
+{
+  "decision": "BLOCK",
+  "rationale": "Clients built against 2.0 lose a response field and an operation, and requests filtering by 'no_show' are rejected.",
+  "changes": [
+    {
+      "rule": "SPEC_FORMAT_CHANGED",
+      "severity": "NON_BREAKING",
+      "operation": null,
+      "field": null,
+      "why": "OpenAPI 3.2.0 to Swagger 2.0, a downgrade."
+    },
+    {
+      "rule": "PARAM_REMOVED",
+      "severity": "POTENTIALLY_BREAKING",
+      "operation": "GET /bookings",
+      "field": "propertyId",
+      "direction": "request",
+      "why": "Clients that adopted v2 still send propertyId."
+    },
+    {
+      "rule": "CONSTRAINT_LOOSENED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /bookings",
+      "field": "guest",
+      "direction": "request",
+      "why": "Longer names are accepted again."
+    },
+    {
+      "rule": "ENUM_VALUE_REMOVED",
+      "severity": "BREAKING",
+      "operation": "GET /bookings",
+      "field": "status",
+      "direction": "request",
+      "why": "Clients filtering by 'no_show' are now rejected."
+    },
+    {
+      "rule": "ENUM_VALUE_REMOVED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /bookings",
+      "field": "status",
+      "direction": "response",
+      "why": "Responses use fewer values; readers are unaffected."
+    },
+    {
+      "rule": "ENUM_VALUE_REMOVED",
+      "severity": "NON_BREAKING",
+      "operation": "POST /bookings",
+      "field": "status",
+      "direction": "response",
+      "why": "Fewer response values."
+    },
+    {
+      "rule": "ENUM_VALUE_REMOVED",
+      "severity": "NON_BREAKING",
+      "operation": "GET /bookings/{bookingId}",
+      "field": "status",
+      "direction": "response",
+      "why": "Fewer response values."
+    },
+    {
+      "rule": "RESPONSE_PROPERTY_REMOVED",
+      "severity": "BREAKING",
+      "operation": "GET /bookings",
+      "field": "currency",
+      "direction": "response",
+      "why": "Clients that read currency lose it."
+    },
+    {
+      "rule": "RESPONSE_PROPERTY_REMOVED",
+      "severity": "BREAKING",
+      "operation": "POST /bookings",
+      "field": "currency",
+      "direction": "response",
+      "why": "currency removed."
+    },
+    {
+      "rule": "RESPONSE_PROPERTY_REMOVED",
+      "severity": "BREAKING",
+      "operation": "GET /bookings/{bookingId}",
+      "field": "currency",
+      "direction": "response",
+      "why": "currency removed."
+    },
+    {
+      "rule": "OPERATION_REMOVED",
+      "severity": "BREAKING",
+      "operation": "DELETE /bookings/{bookingId}",
+      "field": null,
+      "why": "Cancel disappears."
+    }
+  ]
+}

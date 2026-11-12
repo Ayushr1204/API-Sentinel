@@ -1,0 +1,1 @@
+Payments API 1.4 -> 2.0 (OpenAPI 3.0): authentication moves from an X-API-Key header to a bearer JWT under the same scheme name, GBP is added, a 'refunded' status appears and an optional Idempotency-Key header is added. Expected: BLOCK.
